@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -27,17 +28,20 @@ type Client struct {
 // New creates a new Ollama client
 func New(ollamaURL, model string) (*Client, error) {
 	if ollamaURL == "" {
-		ollamaURL = "http://honker:11434"
-		os.Setenv("OLLAMA_HOST", ollamaURL)
+		ollamaURL = "http://localhost:11434"
 	}
 	if model == "" {
 		model = DefaultModel
 	}
 
-	client, err := api.ClientFromEnvironment()
+	// Parse the base URL
+	baseURL, err := url.Parse(ollamaURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Ollama client: %w", err)
+		return nil, fmt.Errorf("invalid Ollama URL: %w", err)
 	}
+
+	// Create client with the provided URL
+	client := api.NewClient(baseURL, http.DefaultClient)
 
 	return &Client{
 		client:  client,
