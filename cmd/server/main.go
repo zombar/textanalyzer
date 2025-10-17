@@ -57,13 +57,13 @@ func main() {
 	// Initialize API handler
 	handler := api.NewHandler(db, textAnalyzer)
 
-	// Create server
+	// Create server with extended timeouts for AI processing
 	srv := &http.Server{
 		Addr:         ":" + *port,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 420 * time.Second, // 7 minutes for AI analysis
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start server in a goroutine

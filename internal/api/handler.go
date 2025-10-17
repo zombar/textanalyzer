@@ -106,7 +106,7 @@ func (h *Handler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, analysis, http.StatusCreated)
 	case err := <-errorChan:
 		respondError(w, err.Error(), http.StatusInternalServerError)
-	case <-time.After(30 * time.Second):
+	case <-time.After(400 * time.Second):
 		respondError(w, "Analysis timeout", http.StatusRequestTimeout)
 	}
 }
