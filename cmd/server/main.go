@@ -17,12 +17,19 @@ import (
 )
 
 func main() {
+	// Get default values from environment variables, with fallbacks
+	portDefault := getEnv("PORT", "8080")
+	dbPathDefault := getEnv("DB_PATH", "textanalyzer.db")
+	ollamaURLDefault := getEnv("OLLAMA_URL", "http://localhost:11434")
+	ollamaModelDefault := getEnv("OLLAMA_MODEL", "gpt-oss:20b")
+	useOllamaDefault := getEnvBool("USE_OLLAMA", true)
+
 	var (
-		port       = flag.String("port", "8080", "Server port")
-		dbPath     = flag.String("db", "textanalyzer.db", "Database file path")
-		ollamaURL  = flag.String("ollama-url", "http://honker:11434", "Ollama API URL")
-		ollamaModel = flag.String("ollama-model", "gpt-oss:20b", "Ollama model to use")
-		useOllama  = flag.Bool("use-ollama", true, "Enable Ollama for AI-powered analysis")
+		port        = flag.String("port", portDefault, "Server port (env: PORT)")
+		dbPath      = flag.String("db", dbPathDefault, "Database file path (env: DB_PATH)")
+		ollamaURL   = flag.String("ollama-url", ollamaURLDefault, "Ollama API URL (env: OLLAMA_URL)")
+		ollamaModel = flag.String("ollama-model", ollamaModelDefault, "Ollama model to use (env: OLLAMA_MODEL)")
+		useOllama   = flag.Bool("use-ollama", useOllamaDefault, "Enable Ollama for AI-powered analysis (env: USE_OLLAMA)")
 	)
 	flag.Parse()
 
@@ -88,4 +95,20 @@ func main() {
 	}
 
 	log.Println("Server stopped")
+}
+
+// getEnv retrieves an environment variable or returns a default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvBool retrieves a boolean environment variable or returns a default value
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		return value == "true" || value == "1" || value == "yes"
+	}
+	return defaultValue
 }

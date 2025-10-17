@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
-	"os"
 
 	"github.com/ollama/ollama/api"
 )
@@ -214,11 +214,11 @@ type Reference struct {
 
 // AIDetectionResult represents AI-generated content detection
 type AIDetectionResult struct {
-	Likelihood  string   `json:"likelihood"`
-	Confidence  string   `json:"confidence"`
-	Reasoning   string   `json:"reasoning"`
-	Indicators  []string `json:"indicators"`
-	HumanScore  float64  `json:"human_score"`
+	Likelihood string   `json:"likelihood"`
+	Confidence string   `json:"confidence"`
+	Reasoning  string   `json:"reasoning"`
+	Indicators []string `json:"indicators"`
+	HumanScore float64  `json:"human_score"`
 }
 
 // DetectAIContent analyzes whether the text was likely written by AI

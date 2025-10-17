@@ -16,16 +16,16 @@ import (
 
 func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 	dbPath := "test_api_" + time.Now().Format("20060102150405") + ".db"
-	
+
 	db, err := database.New(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	
+
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
-	
+
 	a := analyzer.New()
 	_ = NewHandler(db, a)
 
@@ -36,33 +36,33 @@ func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 		mux:      http.NewServeMux(),
 	}
 	handler.setupRoutes()
-	
+
 	cleanup := func() {
 		db.Close()
 		os.Remove(dbPath)
 	}
-	
+
 	return handler, db, cleanup
 }
 
 func TestHealthEndpoint(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response map[string]string
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-	
+
 	if response["status"] != "ok" {
 		t.Errorf("Expected status 'ok', got '%s'", response["status"])
 	}
@@ -71,35 +71,35 @@ func TestHealthEndpoint(t *testing.T) {
 func TestAnalyzeEndpoint(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	reqBody := map[string]string{
 		"text": "This is a test text for analysis. It contains multiple sentences. The analysis should extract metadata.",
 	}
-	
+
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest(http.MethodPost, "/api/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusCreated {
 		t.Errorf("Expected status 201, got %d", w.Code)
 	}
-	
+
 	var response models.Analysis
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-	
+
 	if response.ID == "" {
 		t.Error("Expected analysis ID to be set")
 	}
-	
+
 	if response.Text != reqBody["text"] {
 		t.Error("Expected text to match request")
 	}
-	
+
 	if response.Metadata.WordCount == 0 {
 		t.Error("Expected word count to be greater than 0")
 	}
@@ -108,18 +108,18 @@ func TestAnalyzeEndpoint(t *testing.T) {
 func TestAnalyzeEndpointEmptyText(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	reqBody := map[string]string{
 		"text": "",
 	}
-	
+
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest(http.MethodPost, "/api/analyze", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", w.Code)
 	}
@@ -128,12 +128,12 @@ func TestAnalyzeEndpointEmptyText(t *testing.T) {
 func TestAnalyzeEndpointInvalidMethod(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/analyze", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("Expected status 405, got %d", w.Code)
 	}
@@ -142,7 +142,7 @@ func TestAnalyzeEndpointInvalidMethod(t *testing.T) {
 func TestGetAnalysisEndpoint(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	// Create a test analysis
 	analysis := &models.Analysis{
 		ID:   "test-get-001",
@@ -154,25 +154,25 @@ func TestGetAnalysisEndpoint(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	if err := db.SaveAnalysis(analysis); err != nil {
 		t.Fatalf("Failed to save test analysis: %v", err)
 	}
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/analyses/test-get-001", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response models.Analysis
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-	
+
 	if response.ID != "test-get-001" {
 		t.Errorf("Expected ID 'test-get-001', got '%s'", response.ID)
 	}
@@ -181,12 +181,12 @@ func TestGetAnalysisEndpoint(t *testing.T) {
 func TestGetAnalysisNotFound(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/analyses/nonexistent", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusNotFound {
 		t.Errorf("Expected status 404, got %d", w.Code)
 	}
@@ -195,7 +195,7 @@ func TestGetAnalysisNotFound(t *testing.T) {
 func TestListAnalysesEndpoint(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	// Create multiple test analyses
 	for i := 1; i <= 5; i++ {
 		analysis := &models.Analysis{
@@ -213,21 +213,21 @@ func TestListAnalysesEndpoint(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/analyses?limit=3&offset=0", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response []*models.Analysis
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-	
+
 	if len(response) != 3 {
 		t.Errorf("Expected 3 analyses, got %d", len(response))
 	}
@@ -236,7 +236,7 @@ func TestListAnalysesEndpoint(t *testing.T) {
 func TestDeleteAnalysisEndpoint(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	// Create a test analysis
 	analysis := &models.Analysis{
 		ID:   "test-delete-001",
@@ -248,20 +248,20 @@ func TestDeleteAnalysisEndpoint(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	if err := db.SaveAnalysis(analysis); err != nil {
 		t.Fatalf("Failed to save test analysis: %v", err)
 	}
-	
+
 	req := httptest.NewRequest(http.MethodDelete, "/api/analyses/test-delete-001", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusNoContent {
 		t.Errorf("Expected status 204, got %d", w.Code)
 	}
-	
+
 	// Verify it's deleted
 	_, err := db.GetAnalysis("test-delete-001")
 	if err == nil {
@@ -272,7 +272,7 @@ func TestDeleteAnalysisEndpoint(t *testing.T) {
 func TestSearchByTagEndpoint(t *testing.T) {
 	handler, db, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	// Create test analyses with tags
 	analysis1 := &models.Analysis{
 		ID:   "test-search-001",
@@ -284,7 +284,7 @@ func TestSearchByTagEndpoint(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	analysis2 := &models.Analysis{
 		ID:   "test-search-002",
 		Text: "Test text 2",
@@ -295,28 +295,28 @@ func TestSearchByTagEndpoint(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	if err := db.SaveAnalysis(analysis1); err != nil {
 		t.Fatalf("Failed to save test analysis 1: %v", err)
 	}
 	if err := db.SaveAnalysis(analysis2); err != nil {
 		t.Fatalf("Failed to save test analysis 2: %v", err)
 	}
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/search?tag=positive", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
-	
+
 	var response []*models.Analysis
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
-	
+
 	if len(response) != 2 {
 		t.Errorf("Expected 2 analyses with 'positive' tag, got %d", len(response))
 	}
@@ -325,12 +325,12 @@ func TestSearchByTagEndpoint(t *testing.T) {
 func TestSearchByTagMissingParameter(t *testing.T) {
 	handler, _, cleanup := setupTestHandler(t)
 	defer cleanup()
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
 	w := httptest.NewRecorder()
-	
+
 	handler.mux.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", w.Code)
 	}

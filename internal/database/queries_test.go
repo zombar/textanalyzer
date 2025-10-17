@@ -10,21 +10,21 @@ import (
 
 func setupTestDB(t *testing.T) (*DB, func()) {
 	dbPath := "test_" + time.Now().Format("20060102150405") + ".db"
-	
+
 	db, err := New(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	
+
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
-	
+
 	cleanup := func() {
 		db.Close()
 		os.Remove(dbPath)
 	}
-	
+
 	return db, cleanup
 }
 
@@ -70,9 +70,9 @@ func createTestAnalysis(id string) *models.Analysis {
 func TestSaveAnalysis(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	analysis := createTestAnalysis("test-001")
-	
+
 	err := db.SaveAnalysis(analysis)
 	if err != nil {
 		t.Fatalf("Failed to save analysis: %v", err)
@@ -82,26 +82,26 @@ func TestSaveAnalysis(t *testing.T) {
 func TestGetAnalysis(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	analysis := createTestAnalysis("test-002")
-	
+
 	if err := db.SaveAnalysis(analysis); err != nil {
 		t.Fatalf("Failed to save analysis: %v", err)
 	}
-	
+
 	retrieved, err := db.GetAnalysis("test-002")
 	if err != nil {
 		t.Fatalf("Failed to get analysis: %v", err)
 	}
-	
+
 	if retrieved.ID != analysis.ID {
 		t.Errorf("Expected ID %s, got %s", analysis.ID, retrieved.ID)
 	}
-	
+
 	if retrieved.Text != analysis.Text {
 		t.Errorf("Expected text %s, got %s", analysis.Text, retrieved.Text)
 	}
-	
+
 	if retrieved.Metadata.WordCount != analysis.Metadata.WordCount {
 		t.Errorf("Expected word count %d, got %d", analysis.Metadata.WordCount, retrieved.Metadata.WordCount)
 	}
@@ -110,12 +110,12 @@ func TestGetAnalysis(t *testing.T) {
 func TestGetAnalysisNotFound(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	_, err := db.GetAnalysis("nonexistent")
 	if err == nil {
 		t.Error("Expected error for nonexistent analysis")
 	}
-	
+
 	if err.Error() != "analysis not found" {
 		t.Errorf("Expected 'analysis not found' error, got %v", err)
 	}
@@ -124,7 +124,7 @@ func TestGetAnalysisNotFound(t *testing.T) {
 func TestListAnalyses(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	// Save multiple analyses
 	for i := 1; i <= 5; i++ {
 		analysis := createTestAnalysis("test-" + string(rune('0'+i)))
@@ -133,23 +133,23 @@ func TestListAnalyses(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond) // Ensure different timestamps
 	}
-	
+
 	// Test pagination
 	analyses, err := db.ListAnalyses(3, 0)
 	if err != nil {
 		t.Fatalf("Failed to list analyses: %v", err)
 	}
-	
+
 	if len(analyses) != 3 {
 		t.Errorf("Expected 3 analyses, got %d", len(analyses))
 	}
-	
+
 	// Test offset
 	analyses, err = db.ListAnalyses(3, 3)
 	if err != nil {
 		t.Fatalf("Failed to list analyses with offset: %v", err)
 	}
-	
+
 	if len(analyses) != 2 {
 		t.Errorf("Expected 2 analyses with offset, got %d", len(analyses))
 	}
@@ -158,17 +158,17 @@ func TestListAnalyses(t *testing.T) {
 func TestGetAnalysesByTag(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	// Create analyses with different tags
 	analysis1 := createTestAnalysis("test-tag-001")
 	analysis1.Metadata.Tags = []string{"positive", "long"}
-	
+
 	analysis2 := createTestAnalysis("test-tag-002")
 	analysis2.Metadata.Tags = []string{"positive", "short"}
-	
+
 	analysis3 := createTestAnalysis("test-tag-003")
 	analysis3.Metadata.Tags = []string{"negative", "long"}
-	
+
 	if err := db.SaveAnalysis(analysis1); err != nil {
 		t.Fatalf("Failed to save analysis 1: %v", err)
 	}
@@ -178,33 +178,33 @@ func TestGetAnalysesByTag(t *testing.T) {
 	if err := db.SaveAnalysis(analysis3); err != nil {
 		t.Fatalf("Failed to save analysis 3: %v", err)
 	}
-	
+
 	// Search by tag
 	analyses, err := db.GetAnalysesByTag("positive")
 	if err != nil {
 		t.Fatalf("Failed to get analyses by tag: %v", err)
 	}
-	
+
 	if len(analyses) != 2 {
 		t.Errorf("Expected 2 analyses with 'positive' tag, got %d", len(analyses))
 	}
-	
+
 	// Search by another tag
 	analyses, err = db.GetAnalysesByTag("long")
 	if err != nil {
 		t.Fatalf("Failed to get analyses by tag: %v", err)
 	}
-	
+
 	if len(analyses) != 2 {
 		t.Errorf("Expected 2 analyses with 'long' tag, got %d", len(analyses))
 	}
-	
+
 	// Search by nonexistent tag
 	analyses, err = db.GetAnalysesByTag("nonexistent")
 	if err != nil {
 		t.Fatalf("Failed to get analyses by tag: %v", err)
 	}
-	
+
 	if len(analyses) != 0 {
 		t.Errorf("Expected 0 analyses with 'nonexistent' tag, got %d", len(analyses))
 	}
@@ -213,19 +213,19 @@ func TestGetAnalysesByTag(t *testing.T) {
 func TestDeleteAnalysis(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	analysis := createTestAnalysis("test-delete-001")
-	
+
 	if err := db.SaveAnalysis(analysis); err != nil {
 		t.Fatalf("Failed to save analysis: %v", err)
 	}
-	
+
 	// Delete the analysis
 	err := db.DeleteAnalysis("test-delete-001")
 	if err != nil {
 		t.Fatalf("Failed to delete analysis: %v", err)
 	}
-	
+
 	// Verify it's deleted
 	_, err = db.GetAnalysis("test-delete-001")
 	if err == nil {
@@ -236,12 +236,12 @@ func TestDeleteAnalysis(t *testing.T) {
 func TestDeleteAnalysisNotFound(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	err := db.DeleteAnalysis("nonexistent")
 	if err == nil {
 		t.Error("Expected error when deleting nonexistent analysis")
 	}
-	
+
 	if err.Error() != "analysis not found" {
 		t.Errorf("Expected 'analysis not found' error, got %v", err)
 	}
@@ -250,18 +250,18 @@ func TestDeleteAnalysisNotFound(t *testing.T) {
 func TestMigrations(t *testing.T) {
 	dbPath := "test_migrations.db"
 	defer os.Remove(dbPath)
-	
+
 	db, err := New(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
 	defer db.Close()
-	
+
 	// Run migrations
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
-	
+
 	// Verify tables exist
 	var count int
 	err = db.conn.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='analyses'").Scan(&count)
@@ -271,7 +271,7 @@ func TestMigrations(t *testing.T) {
 	if count != 1 {
 		t.Error("analyses table should exist")
 	}
-	
+
 	err = db.conn.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tags'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check tags table: %v", err)
@@ -279,7 +279,7 @@ func TestMigrations(t *testing.T) {
 	if count != 1 {
 		t.Error("tags table should exist")
 	}
-	
+
 	// Run migrations again (should be idempotent)
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("Failed to run migrations again: %v", err)
@@ -289,35 +289,35 @@ func TestMigrations(t *testing.T) {
 func TestCascadeDelete(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
-	
+
 	analysis := createTestAnalysis("test-cascade-001")
-	
+
 	if err := db.SaveAnalysis(analysis); err != nil {
 		t.Fatalf("Failed to save analysis: %v", err)
 	}
-	
+
 	// Verify tags exist
 	var tagCount int
 	err := db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = ?", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags: %v", err)
 	}
-	
+
 	if tagCount != len(analysis.Metadata.Tags) {
 		t.Errorf("Expected %d tags, got %d", len(analysis.Metadata.Tags), tagCount)
 	}
-	
+
 	// Delete the analysis
 	if err := db.DeleteAnalysis("test-cascade-001"); err != nil {
 		t.Fatalf("Failed to delete analysis: %v", err)
 	}
-	
+
 	// Verify tags are deleted
 	err = db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = ?", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags after delete: %v", err)
 	}
-	
+
 	if tagCount != 0 {
 		t.Errorf("Expected 0 tags after delete, got %d", tagCount)
 	}
