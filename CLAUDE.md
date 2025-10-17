@@ -265,7 +265,7 @@ The analyzer supports optional Ollama integration for AI-powered features:
 # Custom Ollama URL (default: http://localhost:11434)
 ./textanalyzer -ollama-url=http://custom-host:11434
 
-# Custom model (default: qwen2.5:7b)
+# Custom model (default: gpt-oss:20b)
 ./textanalyzer -ollama-model=llama2:13b
 ```
 

@@ -83,7 +83,7 @@ Added three new metadata fields populated by Ollama:
    - Added Ollama-related command-line flags:
      - `-use-ollama` (default: true)
      - `-ollama-url` (default: http://localhost:11434)
-     - `-ollama-model` (default: qwen2.5:7b)
+     - `-ollama-model` (default: gpt-oss:20b)
    - Initialize Ollama client with error handling
    - Graceful fallback to rule-based analysis
 

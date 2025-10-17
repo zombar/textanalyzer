@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"context"
+	"log"
 	"math"
 	"regexp"
 	"sort"
@@ -77,33 +78,50 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 
 	// AI-powered analysis (if Ollama client is available)
 	if a.ollamaClient != nil {
+		log.Println("Ollama client available, starting AI-powered analysis")
+
 		// Generate synopsis
+		log.Println("Generating synopsis...")
 		if synopsis, err := a.ollamaClient.GenerateSynopsis(ctx, text); err == nil {
 			metadata.Synopsis = synopsis
+			log.Printf("Synopsis generated: %d characters", len(synopsis))
+		} else {
+			log.Printf("Synopsis generation failed: %v", err)
 		}
 
 		// Clean text
+		log.Println("Cleaning text...")
 		if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
 			metadata.CleanedText = cleanedText
+			log.Printf("Text cleaned: %d characters", len(cleanedText))
+		} else {
+			log.Printf("Text cleaning failed: %v", err)
 		}
 
 		// Editorial analysis
+		log.Println("Performing editorial analysis...")
 		if editorial, err := a.ollamaClient.EditorialAnalysis(ctx, text); err == nil {
 			metadata.EditorialAnalysis = editorial
+			log.Printf("Editorial analysis completed: %d characters", len(editorial))
+		} else {
+			log.Printf("Editorial analysis failed: %v", err)
 		}
 
 		// AI-generated tags
+		log.Println("Generating AI tags...")
 		metadataMap := map[string]interface{}{
 			"sentiment": metadata.Sentiment,
 		}
 		if tags, err := a.ollamaClient.GenerateTags(ctx, text, metadataMap); err == nil {
 			metadata.Tags = tags
+			log.Printf("Generated %d AI tags: %v", len(tags), tags)
 		} else {
-			// Fallback to rule-based tags
+			log.Printf("AI tag generation failed, falling back to rule-based: %v", err)
 			metadata.Tags = generateTags(text, metadata)
 		}
 
 		// AI-extracted and pruned references
+		log.Println("Extracting references with AI...")
 		if refs, err := a.ollamaClient.ExtractReferences(ctx, text); err == nil {
 			// Convert ollama.Reference to models.Reference
 			metadata.References = make([]models.Reference, len(refs))
@@ -115,11 +133,13 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 					Confidence: ref.Confidence,
 				}
 			}
+			log.Printf("Extracted %d AI references", len(refs))
 		} else {
-			// Fallback to rule-based extraction
+			log.Printf("AI reference extraction failed, falling back to rule-based: %v", err)
 			metadata.References = extractReferences(text)
 		}
 	} else {
+		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)

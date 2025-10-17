@@ -7,7 +7,7 @@ This guide explains how to use the Ollama-powered AI features in Text Analyzer.
 1. Install Ollama from https://ollama.ai
 2. Pull the default model:
    ```bash
-   ollama pull qwen2.5:7b
+   ollama pull gpt-oss:20b
    ```
 
 ## Starting Ollama
@@ -136,7 +136,7 @@ curl "http://localhost:8080/api/search/reference?reference=1.1°C"
 
 | Model | Size | Speed | Quality | Use Case |
 |-------|------|-------|---------|----------|
-| qwen2.5:7b | 4.7GB | Fast | Good | Default, balanced performance |
+| gpt-oss:20b | 4.7GB | Fast | Good | Default, balanced performance |
 | llama2:13b | 7.4GB | Medium | Better | Higher quality analysis |
 | mistral:7b | 4.1GB | Fast | Good | Faster, similar to qwen |
 | llama2:70b | 39GB | Slow | Best | Maximum quality (requires powerful hardware) |
@@ -144,7 +144,7 @@ curl "http://localhost:8080/api/search/reference?reference=1.1°C"
 ### Pull a Model
 
 ```bash
-ollama pull qwen2.5:7b
+ollama pull gpt-oss:20b
 ollama pull llama2:13b
 ```
 
@@ -161,7 +161,7 @@ ollama pull llama2:13b
 
 ### Slow Performance
 
-1. Use a smaller model (qwen2.5:7b or mistral:7b)
+1. Use a smaller model (gpt-oss:20b or mistral:7b)
 2. Ensure adequate RAM (8GB minimum, 16GB recommended)
 3. Use GPU acceleration if available
 

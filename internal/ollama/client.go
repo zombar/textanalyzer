@@ -4,15 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/ollama/ollama/api"
 )
 
 const (
-	DefaultModel   = "qwen2.5:7b"
-	DefaultTimeout = 60 * time.Second
+	DefaultModel   = "gpt-oss:20b"
+	DefaultTimeout = 360 * time.Second
 )
 
 // Client wraps the Ollama API client
@@ -25,7 +27,8 @@ type Client struct {
 // New creates a new Ollama client
 func New(ollamaURL, model string) (*Client, error) {
 	if ollamaURL == "" {
-		ollamaURL = "http://localhost:11434"
+		ollamaURL = "http://honker:11434"
+		os.Setenv("OLLAMA_HOST", ollamaURL)
 	}
 	if model == "" {
 		model = DefaultModel
@@ -45,6 +48,8 @@ func New(ollamaURL, model string) (*Client, error) {
 
 // GenerateResponse generates a response from the LLM
 func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, error) {
+	log.Printf("Ollama: Sending request to model %s (timeout: %v)", c.model, c.timeout)
+
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
@@ -61,10 +66,13 @@ func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, e
 	})
 
 	if err != nil {
+		log.Printf("Ollama: Generation failed: %v", err)
 		return "", fmt.Errorf("generation failed: %w", err)
 	}
 
-	return strings.TrimSpace(response.String()), nil
+	result := strings.TrimSpace(response.String())
+	log.Printf("Ollama: Response received (%d chars)", len(result))
+	return result, nil
 }
 
 // GenerateSynopsis creates a 3-4 sentence synopsis of the text
