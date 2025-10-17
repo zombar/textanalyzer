@@ -13,12 +13,16 @@ import (
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/api"
 	"github.com/zombar/textanalyzer/internal/database"
+	"github.com/zombar/textanalyzer/internal/ollama"
 )
 
 func main() {
 	var (
-		port   = flag.String("port", "8080", "Server port")
-		dbPath = flag.String("db", "textanalyzer.db", "Database file path")
+		port       = flag.String("port", "8080", "Server port")
+		dbPath     = flag.String("db", "textanalyzer.db", "Database file path")
+		ollamaURL  = flag.String("ollama-url", "http://honker:11434", "Ollama API URL")
+		ollamaModel = flag.String("ollama-model", "gpt-oss:20b", "Ollama model to use")
+		useOllama  = flag.Bool("use-ollama", true, "Enable Ollama for AI-powered analysis")
 	)
 	flag.Parse()
 
@@ -35,18 +39,31 @@ func main() {
 	}
 
 	// Initialize analyzer
-	textAnalyzer := analyzer.New()
+	var textAnalyzer *analyzer.Analyzer
+	if *useOllama {
+		ollamaClient, err := ollama.New(*ollamaURL, *ollamaModel)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Ollama client: %v. Falling back to rule-based analysis.", err)
+			textAnalyzer = analyzer.New()
+		} else {
+			log.Printf("Ollama client initialized with model: %s", *ollamaModel)
+			textAnalyzer = analyzer.NewWithOllama(ollamaClient)
+		}
+	} else {
+		log.Println("Ollama disabled, using rule-based analysis")
+		textAnalyzer = analyzer.New()
+	}
 
 	// Initialize API handler
 	handler := api.NewHandler(db, textAnalyzer)
 
-	// Create server
+	// Create server with extended timeouts for AI processing
 	srv := &http.Server{
 		Addr:         ":" + *port,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 420 * time.Second, // 7 minutes for AI analysis
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start server in a goroutine

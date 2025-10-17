@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"context"
+	"log"
 	"math"
 	"regexp"
 	"sort"
@@ -8,11 +10,13 @@ import (
 	"unicode"
 
 	"github.com/zombar/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/ollama"
 )
 
 // Analyzer performs text analysis
 type Analyzer struct {
-	stopWords map[string]bool
+	stopWords    map[string]bool
+	ollamaClient *ollama.Client
 }
 
 // New creates a new Analyzer
@@ -22,8 +26,21 @@ func New() *Analyzer {
 	}
 }
 
+// NewWithOllama creates a new Analyzer with Ollama integration
+func NewWithOllama(ollamaClient *ollama.Client) *Analyzer {
+	return &Analyzer{
+		stopWords:    getStopWords(),
+		ollamaClient: ollamaClient,
+	}
+}
+
 // Analyze performs comprehensive text analysis
 func (a *Analyzer) Analyze(text string) models.Metadata {
+	return a.AnalyzeWithContext(context.Background(), text)
+}
+
+// AnalyzeWithContext performs comprehensive text analysis with context support
+func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.Metadata {
 	metadata := models.Metadata{}
 
 	// Basic statistics
@@ -59,11 +76,92 @@ func (a *Analyzer) Analyze(text string) models.Metadata {
 		metadata.AvgSentenceLength = float64(metadata.WordCount) / float64(metadata.SentenceCount)
 	}
 
-	// References
-	metadata.References = extractReferences(text)
+	// AI-powered analysis (if Ollama client is available)
+	if a.ollamaClient != nil {
+		log.Println("Ollama client available, starting AI-powered analysis")
 
-	// Tags
-	metadata.Tags = generateTags(text, metadata)
+		// Generate synopsis
+		log.Println("Generating synopsis...")
+		if synopsis, err := a.ollamaClient.GenerateSynopsis(ctx, text); err == nil {
+			metadata.Synopsis = synopsis
+			log.Printf("Synopsis generated: %d characters", len(synopsis))
+		} else {
+			log.Printf("Synopsis generation failed: %v", err)
+		}
+
+		// Clean text
+		log.Println("Cleaning text...")
+		if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
+			metadata.CleanedText = cleanedText
+			log.Printf("Text cleaned: %d characters", len(cleanedText))
+		} else {
+			log.Printf("Text cleaning failed: %v", err)
+		}
+
+		// Editorial analysis
+		log.Println("Performing editorial analysis...")
+		if editorial, err := a.ollamaClient.EditorialAnalysis(ctx, text); err == nil {
+			metadata.EditorialAnalysis = editorial
+			log.Printf("Editorial analysis completed: %d characters", len(editorial))
+		} else {
+			log.Printf("Editorial analysis failed: %v", err)
+		}
+
+		// AI-generated tags
+		log.Println("Generating AI tags...")
+		metadataMap := map[string]interface{}{
+			"sentiment": metadata.Sentiment,
+		}
+		if tags, err := a.ollamaClient.GenerateTags(ctx, text, metadataMap); err == nil {
+			metadata.Tags = tags
+			log.Printf("Generated %d AI tags: %v", len(tags), tags)
+		} else {
+			log.Printf("AI tag generation failed, falling back to rule-based: %v", err)
+			metadata.Tags = generateTags(text, metadata)
+		}
+
+		// AI-extracted and pruned references
+		log.Println("Extracting references with AI...")
+		if refs, err := a.ollamaClient.ExtractReferences(ctx, text); err == nil {
+			// Convert ollama.Reference to models.Reference
+			metadata.References = make([]models.Reference, len(refs))
+			for i, ref := range refs {
+				metadata.References[i] = models.Reference{
+					Text:       ref.Text,
+					Type:       ref.Type,
+					Context:    ref.Context,
+					Confidence: ref.Confidence,
+				}
+			}
+			log.Printf("Extracted %d AI references", len(refs))
+		} else {
+			log.Printf("AI reference extraction failed, falling back to rule-based: %v", err)
+			metadata.References = extractReferences(text)
+		}
+
+		// AI content detection
+		log.Println("Detecting AI-generated content...")
+		if aiDetection, err := a.ollamaClient.DetectAIContent(ctx, text); err == nil {
+			metadata.AIDetection = models.AIDetectionResult{
+				Likelihood:  aiDetection.Likelihood,
+				Confidence:  aiDetection.Confidence,
+				Reasoning:   aiDetection.Reasoning,
+				Indicators:  aiDetection.Indicators,
+				HumanScore:  aiDetection.HumanScore,
+			}
+			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
+				aiDetection.Likelihood, aiDetection.HumanScore)
+		} else {
+			log.Printf("AI detection failed: %v", err)
+		}
+
+		log.Println("AI-powered analysis completed")
+	} else {
+		log.Println("Ollama client not available, using rule-based analysis")
+		// Fallback to rule-based analysis when Ollama is not available
+		metadata.References = extractReferences(text)
+		metadata.Tags = generateTags(text, metadata)
+	}
 
 	// Language indicators
 	metadata.Language = detectLanguage(text)

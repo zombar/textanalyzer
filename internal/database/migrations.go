@@ -51,6 +51,24 @@ var migrations = []Migration{
 			);
 		`,
 	},
+	{
+		Version: 4,
+		Name:    "create_text_references_table",
+		SQL: `
+			CREATE TABLE IF NOT EXISTS text_references (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				analysis_id TEXT NOT NULL,
+				text TEXT NOT NULL,
+				type TEXT NOT NULL,
+				context TEXT,
+				confidence TEXT,
+				FOREIGN KEY (analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
+			);
+			CREATE INDEX IF NOT EXISTS idx_text_references_analysis_id ON text_references(analysis_id);
+			CREATE INDEX IF NOT EXISTS idx_text_references_text ON text_references(text);
+			CREATE INDEX IF NOT EXISTS idx_text_references_type ON text_references(type);
+		`,
+	},
 }
 
 // Migrate runs all pending migrations
