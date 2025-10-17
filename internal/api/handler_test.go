@@ -340,12 +340,139 @@ func TestGenerateID(t *testing.T) {
 	id1 := generateID()
 	time.Sleep(1 * time.Millisecond)
 	id2 := generateID()
-	
+
 	if id1 == id2 {
 		t.Error("Generated IDs should be unique")
 	}
-	
+
 	if len(id1) == 0 {
 		t.Error("Generated ID should not be empty")
+	}
+
+	// Verify UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	if len(id1) != 36 {
+		t.Errorf("Expected UUID length 36, got %d", len(id1))
+	}
+
+	// Check for proper UUID format with hyphens
+	if id1[8] != '-' || id1[13] != '-' || id1[18] != '-' || id1[23] != '-' {
+		t.Errorf("Generated ID does not match UUID format: %s", id1)
+	}
+}
+
+func TestGetAnalysisByUUID(t *testing.T) {
+	handler, db, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	// Create a test analysis with UUID
+	uuid := generateID()
+	analysis := &models.Analysis{
+		ID:   uuid,
+		Text: "Test text for UUID",
+		Metadata: models.Metadata{
+			WordCount: 4,
+			Tags:      []string{"test", "uuid"},
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := db.SaveAnalysis(analysis); err != nil {
+		t.Fatalf("Failed to save test analysis: %v", err)
+	}
+
+	// Test GET /api/uuid/{uuid}
+	req := httptest.NewRequest(http.MethodGet, "/api/uuid/"+uuid, nil)
+	w := httptest.NewRecorder()
+
+	handler.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var response models.Analysis
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if response.ID != uuid {
+		t.Errorf("Expected ID '%s', got '%s'", uuid, response.ID)
+	}
+
+	if response.Text != "Test text for UUID" {
+		t.Errorf("Expected text to match, got '%s'", response.Text)
+	}
+}
+
+func TestDeleteAnalysisByUUID(t *testing.T) {
+	handler, db, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	// Create a test analysis with UUID
+	uuid := generateID()
+	analysis := &models.Analysis{
+		ID:   uuid,
+		Text: "Test text to delete",
+		Metadata: models.Metadata{
+			WordCount: 4,
+			Tags:      []string{"test"},
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := db.SaveAnalysis(analysis); err != nil {
+		t.Fatalf("Failed to save test analysis: %v", err)
+	}
+
+	// Test DELETE /api/uuid/{uuid}
+	req := httptest.NewRequest(http.MethodDelete, "/api/uuid/"+uuid, nil)
+	w := httptest.NewRecorder()
+
+	handler.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("Expected status 204, got %d", w.Code)
+	}
+
+	// Verify it's deleted
+	_, err := db.GetAnalysisByUUID(uuid)
+	if err == nil {
+		t.Error("Expected analysis to be deleted")
+	}
+}
+
+func TestGetAnalysisByUUIDNotFound(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	// Generate a UUID that doesn't exist
+	uuid := generateID()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/uuid/"+uuid, nil)
+	w := httptest.NewRecorder()
+
+	handler.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", w.Code)
+	}
+}
+
+func TestDeleteAnalysisByUUIDNotFound(t *testing.T) {
+	handler, _, cleanup := setupTestHandler(t)
+	defer cleanup()
+
+	// Generate a UUID that doesn't exist
+	uuid := generateID()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/uuid/"+uuid, nil)
+	w := httptest.NewRecorder()
+
+	handler.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status 404, got %d", w.Code)
 	}
 }

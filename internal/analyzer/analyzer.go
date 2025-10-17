@@ -155,7 +155,6 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			log.Printf("AI detection failed: %v", err)
 		}
 
-		log.Println("AI-powered analysis completed")
 	} else {
 		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -45,6 +48,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/analyze", h.handleAnalyze)
 	h.mux.HandleFunc("/api/analyses", h.handleListAnalyses)
 	h.mux.HandleFunc("/api/analyses/", h.handleAnalysisOperations)
+	h.mux.HandleFunc("/api/uuid/", h.handleUUIDOperations)
 	h.mux.HandleFunc("/api/search", h.handleSearchByTag)
 	h.mux.HandleFunc("/api/search/reference", h.handleSearchByReference)
 	h.mux.HandleFunc("/health", h.handleHealth)
@@ -229,6 +233,79 @@ func (h *Handler) deleteAnalysis(w http.ResponseWriter, r *http.Request, id stri
 	}
 }
 
+// handleUUIDOperations handles GET and DELETE for analyses by UUID
+func (h *Handler) handleUUIDOperations(w http.ResponseWriter, r *http.Request) {
+	uuid := r.URL.Path[len("/api/uuid/"):]
+	if uuid == "" {
+		respondError(w, "UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		h.getAnalysisByUUID(w, uuid)
+	case http.MethodDelete:
+		h.deleteAnalysisByUUID(w, uuid)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// getAnalysisByUUID retrieves an analysis by UUID
+func (h *Handler) getAnalysisByUUID(w http.ResponseWriter, uuid string) {
+	resultChan := make(chan *models.Analysis)
+	errorChan := make(chan error)
+
+	go func() {
+		analysis, err := h.db.GetAnalysisByUUID(uuid)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		resultChan <- analysis
+	}()
+
+	select {
+	case analysis := <-resultChan:
+		respondJSON(w, analysis, http.StatusOK)
+	case err := <-errorChan:
+		if err.Error() == "analysis not found" {
+			respondError(w, err.Error(), http.StatusNotFound)
+		} else {
+			respondError(w, err.Error(), http.StatusInternalServerError)
+		}
+	case <-time.After(10 * time.Second):
+		respondError(w, "Request timeout", http.StatusRequestTimeout)
+	}
+}
+
+// deleteAnalysisByUUID deletes an analysis by UUID
+func (h *Handler) deleteAnalysisByUUID(w http.ResponseWriter, uuid string) {
+	errorChan := make(chan error)
+	doneChan := make(chan bool)
+
+	go func() {
+		if err := h.db.DeleteAnalysisByUUID(uuid); err != nil {
+			errorChan <- err
+			return
+		}
+		doneChan <- true
+	}()
+
+	select {
+	case <-doneChan:
+		w.WriteHeader(http.StatusNoContent)
+	case err := <-errorChan:
+		if err.Error() == "analysis not found" {
+			respondError(w, err.Error(), http.StatusNotFound)
+		} else {
+			respondError(w, err.Error(), http.StatusInternalServerError)
+		}
+	case <-time.After(10 * time.Second):
+		respondError(w, "Request timeout", http.StatusRequestTimeout)
+	}
+}
+
 // handleSearchByTag handles searching analyses by tag
 func (h *Handler) handleSearchByTag(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -317,7 +394,24 @@ func respondError(w http.ResponseWriter, message string, statusCode int) {
 	})
 }
 
-// generateID generates a unique ID for an analysis
+// generateID generates a UUID for an analysis
 func generateID() string {
-	return time.Now().Format("20060102150405") + "-" + strconv.FormatInt(time.Now().UnixNano()%1000000, 10)
+	uuid := make([]byte, 16)
+	_, err := rand.Read(uuid)
+	if err != nil {
+		// Fallback to timestamp-based ID if random generation fails
+		return time.Now().Format("20060102150405") + "-" + strconv.FormatInt(time.Now().UnixNano()%1000000, 10)
+	}
+
+	// Set version (4) and variant bits according to RFC 4122
+	uuid[6] = (uuid[6] & 0x0f) | 0x40 // Version 4
+	uuid[8] = (uuid[8] & 0x3f) | 0x80 // Variant bits
+
+	// Format as standard UUID string: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	return fmt.Sprintf("%s-%s-%s-%s-%s",
+		hex.EncodeToString(uuid[0:4]),
+		hex.EncodeToString(uuid[4:6]),
+		hex.EncodeToString(uuid[6:8]),
+		hex.EncodeToString(uuid[8:10]),
+		hex.EncodeToString(uuid[10:16]))
 }

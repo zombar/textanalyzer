@@ -260,3 +260,13 @@ func (db *DB) GetAnalysesByReference(referenceText string) ([]*models.Analysis, 
 
 	return analyses, nil
 }
+
+// GetAnalysisByUUID retrieves an analysis by UUID (alias for GetAnalysis)
+func (db *DB) GetAnalysisByUUID(uuid string) (*models.Analysis, error) {
+	return db.GetAnalysis(uuid)
+}
+
+// DeleteAnalysisByUUID deletes an analysis by UUID (alias for DeleteAnalysis)
+func (db *DB) DeleteAnalysisByUUID(uuid string) error {
+	return db.DeleteAnalysis(uuid)
+}
