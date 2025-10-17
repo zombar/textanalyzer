@@ -270,7 +270,7 @@ The application supports configuration via both environment variables and comman
 |---------------------|------|---------|-------------|
 | `PORT` | `-port` | `8080` | Server port |
 | `DB_PATH` | `-db` | `textanalyzer.db` | Database file path |
-| `OLLAMA_URL` | `-ollama-url` | `http://honker:11434` | Ollama API URL |
+| `OLLAMA_URL` | `-ollama-url` | `http://localhost:11434` | Ollama API URL |
 | `OLLAMA_MODEL` | `-ollama-model` | `gpt-oss:20b` | Ollama model to use |
 | `USE_OLLAMA` | `-use-ollama` | `true` | Enable Ollama for AI-powered analysis |
 
