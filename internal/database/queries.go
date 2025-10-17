@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yourusername/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/models"
 )
 
 // SaveAnalysis saves an analysis to the database

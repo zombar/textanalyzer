@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/rs/cors"
-	"github.com/yourusername/textanalyzer/internal/analyzer"
-	"github.com/yourusername/textanalyzer/internal/database"
-	"github.com/yourusername/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/analyzer"
+	"github.com/zombar/textanalyzer/internal/database"
+	"github.com/zombar/textanalyzer/internal/models"
 )
 
 // Handler handles HTTP requests

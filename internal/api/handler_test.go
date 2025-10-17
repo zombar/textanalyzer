@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/textanalyzer/internal/analyzer"
-	"github.com/yourusername/textanalyzer/internal/database"
-	"github.com/yourusername/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/analyzer"
+	"github.com/zombar/textanalyzer/internal/database"
+	"github.com/zombar/textanalyzer/internal/models"
 )
 
 func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {

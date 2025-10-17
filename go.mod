@@ -1,4 +1,4 @@
-module github.com/yourusername/textanalyzer
+module github.com/zombar/textanalyzer
 
 go 1.21
 

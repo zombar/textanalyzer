@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/yourusername/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/models"
 )
 
 // Analyzer performs text analysis

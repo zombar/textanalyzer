@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourusername/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/models"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {

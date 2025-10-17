@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yourusername/textanalyzer/internal/analyzer"
-	"github.com/yourusername/textanalyzer/internal/api"
-	"github.com/yourusername/textanalyzer/internal/database"
+	"github.com/zombar/textanalyzer/internal/analyzer"
+	"github.com/zombar/textanalyzer/internal/api"
+	"github.com/zombar/textanalyzer/internal/database"
 )
 
 func main() {
