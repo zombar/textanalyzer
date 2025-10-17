@@ -42,6 +42,17 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 		}
 	}
 
+	// Insert references
+	for _, ref := range analysis.Metadata.References {
+		_, err = tx.Exec(`
+			INSERT INTO text_references (analysis_id, text, type, context, confidence)
+			VALUES (?, ?, ?, ?, ?)
+		`, analysis.ID, ref.Text, ref.Type, ref.Context, ref.Confidence)
+		if err != nil {
+			return fmt.Errorf("failed to insert reference: %w", err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -199,4 +210,53 @@ func (db *DB) DeleteAnalysis(id string) error {
 	}
 
 	return nil
+}
+
+// GetAnalysesByReference retrieves all analyses containing a specific reference text
+func (db *DB) GetAnalysesByReference(referenceText string) ([]*models.Analysis, error) {
+	rows, err := db.conn.Query(`
+		SELECT DISTINCT a.id, a.text, a.metadata, a.created_at, a.updated_at
+		FROM analyses a
+		INNER JOIN text_references r ON a.id = r.analysis_id
+		WHERE r.text LIKE ?
+		ORDER BY a.created_at DESC
+	`, "%"+referenceText+"%")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query analyses by reference: %w", err)
+	}
+	defer rows.Close()
+
+	var analyses []*models.Analysis
+	for rows.Next() {
+		var (
+			id           string
+			text         string
+			metadataJSON string
+			createdAt    time.Time
+			updatedAt    time.Time
+		)
+
+		if err := rows.Scan(&id, &text, &metadataJSON, &createdAt, &updatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		var metadata models.Metadata
+		if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+		}
+
+		analyses = append(analyses, &models.Analysis{
+			ID:        id,
+			Text:      text,
+			Metadata:  metadata,
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return analyses, nil
 }

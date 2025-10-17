@@ -46,6 +46,7 @@ func (h *Handler) setupRoutes() {
 	h.mux.HandleFunc("/api/analyses", h.handleListAnalyses)
 	h.mux.HandleFunc("/api/analyses/", h.handleAnalysisOperations)
 	h.mux.HandleFunc("/api/search", h.handleSearchByTag)
+	h.mux.HandleFunc("/api/search/reference", h.handleSearchByReference)
 	h.mux.HandleFunc("/health", h.handleHealth)
 }
 
@@ -247,6 +248,42 @@ func (h *Handler) handleSearchByTag(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		analyses, err := h.db.GetAnalysesByTag(tag)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+		resultChan <- analyses
+	}()
+
+	select {
+	case analyses := <-resultChan:
+		respondJSON(w, analyses, http.StatusOK)
+	case err := <-errorChan:
+		respondError(w, err.Error(), http.StatusInternalServerError)
+	case <-time.After(10 * time.Second):
+		respondError(w, "Request timeout", http.StatusRequestTimeout)
+	}
+}
+
+// handleSearchByReference handles searching analyses by reference text
+func (h *Handler) handleSearchByReference(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	reference := r.URL.Query().Get("reference")
+	if reference == "" {
+		respondError(w, "Reference parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	// Search in a goroutine
+	resultChan := make(chan []*models.Analysis)
+	errorChan := make(chan error)
+
+	go func() {
+		analyses, err := h.db.GetAnalysesByReference(reference)
 		if err != nil {
 			errorChan <- err
 			return

@@ -53,6 +53,11 @@ type Metadata struct {
 	QuestionCount      int     `json:"question_count"`
 	ExclamationCount   int     `json:"exclamation_count"`
 	CapitalizedPercent float64 `json:"capitalized_percent"`
+
+	// AI-generated content
+	Synopsis          string `json:"synopsis"`           // 3-4 sentence summary
+	CleanedText       string `json:"cleaned_text"`       // Text with artifacts removed
+	EditorialAnalysis string `json:"editorial_analysis"` // Bias, motivation, and slant analysis
 }
 
 // WordFrequency represents a word and its frequency

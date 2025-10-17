@@ -111,7 +111,7 @@ func TestCountParagraphs(t *testing.T) {
 }
 
 func TestSentimentAnalysis(t *testing.T) {
-	a := New()
+	_ = New()
 	
 	tests := []struct {
 		name             string

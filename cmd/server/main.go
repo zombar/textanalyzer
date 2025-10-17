@@ -13,12 +13,16 @@ import (
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/api"
 	"github.com/zombar/textanalyzer/internal/database"
+	"github.com/zombar/textanalyzer/internal/ollama"
 )
 
 func main() {
 	var (
-		port   = flag.String("port", "8080", "Server port")
-		dbPath = flag.String("db", "textanalyzer.db", "Database file path")
+		port       = flag.String("port", "8080", "Server port")
+		dbPath     = flag.String("db", "textanalyzer.db", "Database file path")
+		ollamaURL  = flag.String("ollama-url", "http://localhost:11434", "Ollama API URL")
+		ollamaModel = flag.String("ollama-model", "qwen2.5:7b", "Ollama model to use")
+		useOllama  = flag.Bool("use-ollama", true, "Enable Ollama for AI-powered analysis")
 	)
 	flag.Parse()
 
@@ -35,7 +39,20 @@ func main() {
 	}
 
 	// Initialize analyzer
-	textAnalyzer := analyzer.New()
+	var textAnalyzer *analyzer.Analyzer
+	if *useOllama {
+		ollamaClient, err := ollama.New(*ollamaURL, *ollamaModel)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize Ollama client: %v. Falling back to rule-based analysis.", err)
+			textAnalyzer = analyzer.New()
+		} else {
+			log.Printf("Ollama client initialized with model: %s", *ollamaModel)
+			textAnalyzer = analyzer.NewWithOllama(ollamaClient)
+		}
+	} else {
+		log.Println("Ollama disabled, using rule-based analysis")
+		textAnalyzer = analyzer.New()
+	}
 
 	// Initialize API handler
 	handler := api.NewHandler(db, textAnalyzer)

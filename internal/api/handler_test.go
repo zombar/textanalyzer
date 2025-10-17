@@ -27,7 +27,15 @@ func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 	}
 	
 	a := analyzer.New()
-	handler := NewHandler(db, a).(*Handler)
+	_ = NewHandler(db, a)
+
+	// Create internal handler for testing
+	handler := &Handler{
+		db:       db,
+		analyzer: a,
+		mux:      http.NewServeMux(),
+	}
+	handler.setupRoutes()
 	
 	cleanup := func() {
 		db.Close()

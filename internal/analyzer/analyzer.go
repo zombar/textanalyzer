@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"context"
 	"math"
 	"regexp"
 	"sort"
@@ -8,11 +9,13 @@ import (
 	"unicode"
 
 	"github.com/zombar/textanalyzer/internal/models"
+	"github.com/zombar/textanalyzer/internal/ollama"
 )
 
 // Analyzer performs text analysis
 type Analyzer struct {
-	stopWords map[string]bool
+	stopWords    map[string]bool
+	ollamaClient *ollama.Client
 }
 
 // New creates a new Analyzer
@@ -22,8 +25,21 @@ func New() *Analyzer {
 	}
 }
 
+// NewWithOllama creates a new Analyzer with Ollama integration
+func NewWithOllama(ollamaClient *ollama.Client) *Analyzer {
+	return &Analyzer{
+		stopWords:    getStopWords(),
+		ollamaClient: ollamaClient,
+	}
+}
+
 // Analyze performs comprehensive text analysis
 func (a *Analyzer) Analyze(text string) models.Metadata {
+	return a.AnalyzeWithContext(context.Background(), text)
+}
+
+// AnalyzeWithContext performs comprehensive text analysis with context support
+func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.Metadata {
 	metadata := models.Metadata{}
 
 	// Basic statistics
@@ -59,11 +75,55 @@ func (a *Analyzer) Analyze(text string) models.Metadata {
 		metadata.AvgSentenceLength = float64(metadata.WordCount) / float64(metadata.SentenceCount)
 	}
 
-	// References
-	metadata.References = extractReferences(text)
+	// AI-powered analysis (if Ollama client is available)
+	if a.ollamaClient != nil {
+		// Generate synopsis
+		if synopsis, err := a.ollamaClient.GenerateSynopsis(ctx, text); err == nil {
+			metadata.Synopsis = synopsis
+		}
 
-	// Tags
-	metadata.Tags = generateTags(text, metadata)
+		// Clean text
+		if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
+			metadata.CleanedText = cleanedText
+		}
+
+		// Editorial analysis
+		if editorial, err := a.ollamaClient.EditorialAnalysis(ctx, text); err == nil {
+			metadata.EditorialAnalysis = editorial
+		}
+
+		// AI-generated tags
+		metadataMap := map[string]interface{}{
+			"sentiment": metadata.Sentiment,
+		}
+		if tags, err := a.ollamaClient.GenerateTags(ctx, text, metadataMap); err == nil {
+			metadata.Tags = tags
+		} else {
+			// Fallback to rule-based tags
+			metadata.Tags = generateTags(text, metadata)
+		}
+
+		// AI-extracted and pruned references
+		if refs, err := a.ollamaClient.ExtractReferences(ctx, text); err == nil {
+			// Convert ollama.Reference to models.Reference
+			metadata.References = make([]models.Reference, len(refs))
+			for i, ref := range refs {
+				metadata.References[i] = models.Reference{
+					Text:       ref.Text,
+					Type:       ref.Type,
+					Context:    ref.Context,
+					Confidence: ref.Confidence,
+				}
+			}
+		} else {
+			// Fallback to rule-based extraction
+			metadata.References = extractReferences(text)
+		}
+	} else {
+		// Fallback to rule-based analysis when Ollama is not available
+		metadata.References = extractReferences(text)
+		metadata.Tags = generateTags(text, metadata)
+	}
 
 	// Language indicators
 	metadata.Language = detectLanguage(text)

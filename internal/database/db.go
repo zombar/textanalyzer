@@ -23,6 +23,11 @@ func New(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	// Enable foreign keys for SQLite
+	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	return &DB{conn: conn}, nil
 }
 
