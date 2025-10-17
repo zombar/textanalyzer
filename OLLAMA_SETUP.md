@@ -225,8 +225,8 @@ cd textanalyzer
 go build -o textanalyzer ./cmd/server
 ./textanalyzer
 
-# Test with example
-curl -X POST http://localhost:8080/api/analyze \
+# Test with example (note: -m 420 sets 7 minute timeout for AI processing)
+curl -m 420 -X POST http://localhost:8080/api/analyze \
   -H "Content-Type: application/json" \
   -d @examples/climate_change.json
 
@@ -234,6 +234,7 @@ curl -X POST http://localhost:8080/api/analyze \
 # - synopsis
 # - cleaned_text
 # - editorial_analysis
+# - ai_detection (NEW!)
 # - AI-generated tags
 # - AI-extracted references
 ```
