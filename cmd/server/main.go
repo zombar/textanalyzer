@@ -20,7 +20,7 @@ func main() {
 	// Get default values from environment variables, with fallbacks
 	portDefault := getEnv("PORT", "8080")
 	dbPathDefault := getEnv("DB_PATH", "textanalyzer.db")
-	ollamaURLDefault := getEnv("OLLAMA_URL", "http://honker:11434")
+	ollamaURLDefault := getEnv("OLLAMA_URL", "http://localhost:11434")
 	ollamaModelDefault := getEnv("OLLAMA_MODEL", "gpt-oss:20b")
 	useOllamaDefault := getEnvBool("USE_OLLAMA", true)
 
