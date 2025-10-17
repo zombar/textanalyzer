@@ -17,8 +17,19 @@ go build -o textanalyzer ./cmd/server
 # Run the server (default: port 8080, textanalyzer.db)
 ./textanalyzer
 
-# Run with custom configuration
+# Run with custom configuration via command-line flags
 ./textanalyzer -port 3000 -db mydata.db
+
+# Run with custom configuration via environment variables
+PORT=3000 DB_PATH=mydata.db ./textanalyzer
+
+# Environment variables with all options
+PORT=9090 \
+DB_PATH=custom.db \
+OLLAMA_URL=http://localhost:11434 \
+OLLAMA_MODEL=llama2:13b \
+USE_OLLAMA=true \
+./textanalyzer
 
 # Run tests
 go test ./...
@@ -249,24 +260,57 @@ External dependencies:
 
 Standard library is preferred for all other functionality.
 
+## Configuration
+
+The application supports configuration via both environment variables and command-line flags. Command-line flags take precedence over environment variables.
+
+### Configuration Options
+
+| Environment Variable | Flag | Default | Description |
+|---------------------|------|---------|-------------|
+| `PORT` | `-port` | `8080` | Server port |
+| `DB_PATH` | `-db` | `textanalyzer.db` | Database file path |
+| `OLLAMA_URL` | `-ollama-url` | `http://honker:11434` | Ollama API URL |
+| `OLLAMA_MODEL` | `-ollama-model` | `gpt-oss:20b` | Ollama model to use |
+| `USE_OLLAMA` | `-use-ollama` | `true` | Enable Ollama for AI-powered analysis |
+
+### Configuration Examples
+
+```bash
+# Using environment variables
+PORT=3000 USE_OLLAMA=false ./textanalyzer
+
+# Using command-line flags
+./textanalyzer -port 3000 -use-ollama=false
+
+# Mixing both (flags override environment variables)
+PORT=3000 ./textanalyzer -port 9090  # Uses port 9090
+```
+
+For boolean environment variables, accepted values for `true` are: `true`, `1`, `yes`
+
 ## Ollama Integration
 
 The analyzer supports optional Ollama integration for AI-powered features:
 
-### Command Line Flags
+### Command Line Examples
 
 ```bash
 # Enable Ollama (default: enabled)
 ./textanalyzer -use-ollama=true
+USE_OLLAMA=true ./textanalyzer
 
 # Disable Ollama (fall back to rule-based analysis)
 ./textanalyzer -use-ollama=false
+USE_OLLAMA=false ./textanalyzer
 
-# Custom Ollama URL (default: http://localhost:11434)
+# Custom Ollama URL
 ./textanalyzer -ollama-url=http://custom-host:11434
+OLLAMA_URL=http://custom-host:11434 ./textanalyzer
 
-# Custom model (default: gpt-oss:20b)
+# Custom model
 ./textanalyzer -ollama-model=llama2:13b
+OLLAMA_MODEL=llama2:13b ./textanalyzer
 ```
 
 ### AI-Powered Features
