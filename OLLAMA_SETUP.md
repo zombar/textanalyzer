@@ -96,6 +96,34 @@ More accurate extraction and pruning of factual claims, statistics, quotes, and 
 }
 ```
 
+### 6. AI Content Detection
+Analyzes whether the text was likely written by AI or a human, with detailed reasoning.
+
+**Example:**
+```json
+{
+  "ai_detection": {
+    "likelihood": "unlikely",
+    "confidence": "medium",
+    "reasoning": "The text shows natural imperfections, personal voice, and stylistic variations typical of human writing. While well-structured, it contains informal elements and varied sentence patterns.",
+    "indicators": [
+      "varied sentence structure",
+      "personal voice and opinions",
+      "natural flow with minor imperfections",
+      "domain-specific terminology used naturally"
+    ],
+    "human_score": 75.5
+  }
+}
+```
+
+**Fields:**
+- `likelihood`: How likely the text is AI-generated (very_likely, likely, possible, unlikely, very_unlikely)
+- `confidence`: How confident the assessment is (high, medium, low)
+- `reasoning`: 2-3 sentence explanation of the assessment
+- `indicators`: Specific markers that influenced the decision
+- `human_score`: 0-100 score where 0 = definitely AI, 100 = definitely human
+
 ## New API Endpoint
 
 ### Search by Reference

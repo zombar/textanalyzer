@@ -138,6 +138,24 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			log.Printf("AI reference extraction failed, falling back to rule-based: %v", err)
 			metadata.References = extractReferences(text)
 		}
+
+		// AI content detection
+		log.Println("Detecting AI-generated content...")
+		if aiDetection, err := a.ollamaClient.DetectAIContent(ctx, text); err == nil {
+			metadata.AIDetection = models.AIDetectionResult{
+				Likelihood:  aiDetection.Likelihood,
+				Confidence:  aiDetection.Confidence,
+				Reasoning:   aiDetection.Reasoning,
+				Indicators:  aiDetection.Indicators,
+				HumanScore:  aiDetection.HumanScore,
+			}
+			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
+				aiDetection.Likelihood, aiDetection.HumanScore)
+		} else {
+			log.Printf("AI detection failed: %v", err)
+		}
+
+		log.Println("AI-powered analysis completed")
 	} else {
 		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available

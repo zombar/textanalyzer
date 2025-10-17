@@ -211,3 +211,58 @@ type Reference struct {
 	Context    string `json:"context"`
 	Confidence string `json:"confidence"`
 }
+
+// AIDetectionResult represents AI-generated content detection
+type AIDetectionResult struct {
+	Likelihood  string   `json:"likelihood"`
+	Confidence  string   `json:"confidence"`
+	Reasoning   string   `json:"reasoning"`
+	Indicators  []string `json:"indicators"`
+	HumanScore  float64  `json:"human_score"`
+}
+
+// DetectAIContent analyzes whether the text was likely written by AI
+func (c *Client) DetectAIContent(ctx context.Context, text string) (*AIDetectionResult, error) {
+	prompt := fmt.Sprintf(`Analyze the following text to determine if it was written by an AI or a human. Consider factors such as:
+
+1. Writing patterns (repetitive structures, overly formal tone, perfect grammar)
+2. Vocabulary choices (overuse of certain words, lack of colloquialisms)
+3. Content structure (formulaic organization, lack of personal anecdotes)
+4. Stylistic markers (balanced arguments, hedging language, transitions)
+5. Creativity and authenticity (unique insights vs. generic statements)
+6. Errors and imperfections (natural human mistakes vs. AI consistency)
+
+Provide your assessment as a JSON object with:
+- likelihood: "very_likely" | "likely" | "possible" | "unlikely" | "very_unlikely" (AI-generated)
+- confidence: "high" | "medium" | "low"
+- reasoning: 2-3 sentences explaining your assessment
+- indicators: array of specific markers you found (e.g., "repetitive sentence structure", "lack of personal voice", "perfect grammar")
+- human_score: 0-100 where 0 = definitely AI, 100 = definitely human
+
+Text to analyze:
+%s
+
+Return ONLY the JSON object, nothing else:`, text)
+
+	response, err := c.GenerateResponse(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse JSON response
+	var result AIDetectionResult
+
+	// Try to find JSON object in response
+	start := strings.Index(response, "{")
+	end := strings.LastIndex(response, "}")
+	if start >= 0 && end > start {
+		jsonStr := response[start : end+1]
+		if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+			return nil, fmt.Errorf("failed to parse AI detection JSON: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("no JSON object found in response")
+	}
+
+	return &result, nil
+}

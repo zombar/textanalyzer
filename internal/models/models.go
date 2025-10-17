@@ -58,6 +58,7 @@ type Metadata struct {
 	Synopsis          string `json:"synopsis"`           // 3-4 sentence summary
 	CleanedText       string `json:"cleaned_text"`       // Text with artifacts removed
 	EditorialAnalysis string `json:"editorial_analysis"` // Bias, motivation, and slant analysis
+	AIDetection       AIDetectionResult `json:"ai_detection"` // AI-generated content detection
 }
 
 // WordFrequency represents a word and its frequency
@@ -78,4 +79,13 @@ type Reference struct {
 	Type       string `json:"type"` // claim, statistic, quote, citation
 	Context    string `json:"context"`
 	Confidence string `json:"confidence"` // high, medium, low
+}
+
+// AIDetectionResult represents the analysis of whether content was AI-generated
+type AIDetectionResult struct {
+	Likelihood  string   `json:"likelihood"`  // very_likely, likely, possible, unlikely, very_unlikely
+	Confidence  string   `json:"confidence"`  // high, medium, low
+	Reasoning   string   `json:"reasoning"`   // Explanation of the assessment
+	Indicators  []string `json:"indicators"`  // Specific indicators found
+	HumanScore  float64  `json:"human_score"` // 0-100, higher means more likely human-written
 }
