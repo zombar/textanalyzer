@@ -19,7 +19,7 @@ func getStopWords() map[string]bool {
 		"whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd", "you'll", "you're",
 		"you've", "your", "yours", "yourself", "yourselves",
 	}
-	
+
 	stopWords := make(map[string]bool)
 	for _, word := range words {
 		stopWords[word] = true
@@ -37,7 +37,7 @@ func getPositiveWords() map[string]bool {
 		"benefit", "success", "successful", "win", "winning", "winner", "better", "improvement", "improved",
 		"exciting", "excited", "enthusiasm", "enthusiastic", "optimistic", "hopeful", "promising", "favorable",
 	}
-	
+
 	positiveWords := make(map[string]bool)
 	for _, word := range words {
 		positiveWords[word] = true
@@ -55,7 +55,7 @@ func getNegativeWords() map[string]bool {
 		"concern", "concerned", "worried", "worry", "fear", "afraid", "scary", "dangerous", "risk", "threat",
 		"damage", "damaged", "harm", "harmful", "worse", "loss", "lost", "losing", "loser", "decline", "declined",
 	}
-	
+
 	negativeWords := make(map[string]bool)
 	for _, word := range words {
 		negativeWords[word] = true

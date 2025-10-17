@@ -143,11 +143,11 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		log.Println("Detecting AI-generated content...")
 		if aiDetection, err := a.ollamaClient.DetectAIContent(ctx, text); err == nil {
 			metadata.AIDetection = models.AIDetectionResult{
-				Likelihood:  aiDetection.Likelihood,
-				Confidence:  aiDetection.Confidence,
-				Reasoning:   aiDetection.Reasoning,
-				Indicators:  aiDetection.Indicators,
-				HumanScore:  aiDetection.HumanScore,
+				Likelihood: aiDetection.Likelihood,
+				Confidence: aiDetection.Confidence,
+				Reasoning:  aiDetection.Reasoning,
+				Indicators: aiDetection.Indicators,
+				HumanScore: aiDetection.HumanScore,
 			}
 			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
 				aiDetection.Likelihood, aiDetection.HumanScore)
@@ -263,9 +263,9 @@ func (a *Analyzer) getTopWords(words []string, limit int) []models.WordFrequency
 func (a *Analyzer) getTopPhrases(text string, limit int) []models.PhraseInfo {
 	text = strings.ToLower(text)
 	words := strings.Fields(text)
-	
+
 	phrases := make(map[string]int)
-	
+
 	// Extract 2-word phrases
 	for i := 0; i < len(words)-1; i++ {
 		word1 := cleanWord(words[i])
@@ -275,7 +275,7 @@ func (a *Analyzer) getTopPhrases(text string, limit int) []models.PhraseInfo {
 			phrases[phrase]++
 		}
 	}
-	
+
 	// Extract 3-word phrases
 	for i := 0; i < len(words)-2; i++ {
 		word1 := cleanWord(words[i])
@@ -354,19 +354,19 @@ func (a *Analyzer) extractKeyTerms(words []string, limit int) []string {
 func extractNamedEntities(text string) []string {
 	reg := regexp.MustCompile(`\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b`)
 	matches := reg.FindAllString(text, -1)
-	
+
 	unique := make(map[string]bool)
 	for _, match := range matches {
 		if len(match) > 2 {
 			unique[match] = true
 		}
 	}
-	
+
 	result := []string{}
 	for entity := range unique {
 		result = append(result, entity)
 	}
-	
+
 	sort.Strings(result)
 	return result
 }
@@ -379,7 +379,7 @@ func extractDates(text string) []string {
 		regexp.MustCompile(`\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b`),
 		regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}\b`),
 	}
-	
+
 	unique := make(map[string]bool)
 	for _, pattern := range patterns {
 		matches := pattern.FindAllString(text, -1)
@@ -387,12 +387,12 @@ func extractDates(text string) []string {
 			unique[match] = true
 		}
 	}
-	
+
 	result := []string{}
 	for date := range unique {
 		result = append(result, date)
 	}
-	
+
 	sort.Strings(result)
 	return result
 }
@@ -401,17 +401,17 @@ func extractDates(text string) []string {
 func extractURLs(text string) []string {
 	reg := regexp.MustCompile(`https?://[^\s]+`)
 	matches := reg.FindAllString(text, -1)
-	
+
 	unique := make(map[string]bool)
 	for _, match := range matches {
 		unique[match] = true
 	}
-	
+
 	result := []string{}
 	for url := range unique {
 		result = append(result, url)
 	}
-	
+
 	sort.Strings(result)
 	return result
 }
@@ -420,17 +420,17 @@ func extractURLs(text string) []string {
 func extractEmails(text string) []string {
 	reg := regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`)
 	matches := reg.FindAllString(text, -1)
-	
+
 	unique := make(map[string]bool)
 	for _, match := range matches {
 		unique[match] = true
 	}
-	
+
 	result := []string{}
 	for email := range unique {
 		result = append(result, email)
 	}
-	
+
 	sort.Strings(result)
 	return result
 }
@@ -440,14 +440,14 @@ func calculateReadability(text string, wordCount, sentenceCount int) float64 {
 	if wordCount == 0 || sentenceCount == 0 {
 		return 0
 	}
-	
+
 	syllableCount := countSyllables(text)
-	
+
 	avgWordsPerSentence := float64(wordCount) / float64(sentenceCount)
 	avgSyllablesPerWord := float64(syllableCount) / float64(wordCount)
-	
+
 	score := 206.835 - 1.015*avgWordsPerSentence - 84.6*avgSyllablesPerWord
-	
+
 	return math.Round(score*100) / 100
 }
 
@@ -467,11 +467,11 @@ func countSyllablesInWord(word string) int {
 	if len(word) == 0 {
 		return 0
 	}
-	
+
 	count := 0
 	vowels := "aeiouy"
 	prevWasVowel := false
-	
+
 	for _, char := range word {
 		isVowel := strings.ContainsRune(vowels, char)
 		if isVowel && !prevWasVowel {
@@ -479,16 +479,16 @@ func countSyllablesInWord(word string) int {
 		}
 		prevWasVowel = isVowel
 	}
-	
+
 	// Adjust for silent e
 	if strings.HasSuffix(word, "e") && count > 1 {
 		count--
 	}
-	
+
 	if count == 0 {
 		count = 1
 	}
-	
+
 	return count
 }
 
@@ -526,14 +526,14 @@ func countComplexWords(words []string) int {
 // analyzeSentiment performs basic sentiment analysis
 func analyzeSentiment(text string) (string, float64) {
 	text = strings.ToLower(text)
-	
+
 	positiveWords := getPositiveWords()
 	negativeWords := getNegativeWords()
-	
+
 	words := extractWords(text)
 	positiveCount := 0
 	negativeCount := 0
-	
+
 	for _, word := range words {
 		if positiveWords[word] {
 			positiveCount++
@@ -542,29 +542,29 @@ func analyzeSentiment(text string) (string, float64) {
 			negativeCount++
 		}
 	}
-	
+
 	total := positiveCount + negativeCount
 	if total == 0 {
 		return "neutral", 0.0
 	}
-	
+
 	score := (float64(positiveCount) - float64(negativeCount)) / float64(len(words))
 	score = math.Max(-1.0, math.Min(1.0, score*10))
-	
+
 	sentiment := "neutral"
 	if score > 0.1 {
 		sentiment = "positive"
 	} else if score < -0.1 {
 		sentiment = "negative"
 	}
-	
+
 	return sentiment, math.Round(score*100) / 100
 }
 
 // extractReferences extracts potential references that need verification
 func extractReferences(text string) []models.Reference {
 	references := []models.Reference{}
-	
+
 	// Extract statistics (numbers with units or percentages)
 	statReg := regexp.MustCompile(`\b\d+(?:\.\d+)?%|\b\d+(?:,\d{3})*(?:\.\d+)?\s+(?:million|billion|thousand|percent|dollars?|years?|months?|days?)\b`)
 	statMatches := statReg.FindAllString(text, -1)
@@ -577,7 +577,7 @@ func extractReferences(text string) []models.Reference {
 			Confidence: "medium",
 		})
 	}
-	
+
 	// Extract quotes
 	quoteReg := regexp.MustCompile(`"[^"]{20,}"`)
 	quoteMatches := quoteReg.FindAllString(text, -1)
@@ -589,7 +589,7 @@ func extractReferences(text string) []models.Reference {
 			Confidence: "high",
 		})
 	}
-	
+
 	// Extract claims (sentences with "is", "are", "was", "were")
 	sentences := regexp.MustCompile(`[^.!?]+[.!?]`).FindAllString(text, -1)
 	claimWords := []string{"is", "are", "was", "were", "has", "have", "shows", "demonstrates", "proves"}
@@ -607,7 +607,7 @@ func extractReferences(text string) []models.Reference {
 			}
 		}
 	}
-	
+
 	return references
 }
 
@@ -617,27 +617,27 @@ func extractContext(text, match string, contextLength int) string {
 	if index == -1 {
 		return ""
 	}
-	
+
 	start := index - contextLength
 	if start < 0 {
 		start = 0
 	}
-	
+
 	end := index + len(match) + contextLength
 	if end > len(text) {
 		end = len(text)
 	}
-	
+
 	return strings.TrimSpace(text[start:end])
 }
 
 // generateTags generates tags based on content
 func generateTags(text string, metadata models.Metadata) []string {
 	tags := []string{}
-	
+
 	// Sentiment tag
 	tags = append(tags, metadata.Sentiment)
-	
+
 	// Length tags
 	if metadata.WordCount < 100 {
 		tags = append(tags, "short")
@@ -646,10 +646,10 @@ func generateTags(text string, metadata models.Metadata) []string {
 	} else {
 		tags = append(tags, "long")
 	}
-	
+
 	// Readability tags
 	tags = append(tags, metadata.ReadabilityLevel)
-	
+
 	// Content type tags
 	if metadata.QuestionCount > 3 {
 		tags = append(tags, "faq")
@@ -660,12 +660,12 @@ func generateTags(text string, metadata models.Metadata) []string {
 	if len(metadata.References) > 5 {
 		tags = append(tags, "research")
 	}
-	
+
 	// Topic tags from key terms (top 3)
 	for i := 0; i < len(metadata.KeyTerms) && i < 3; i++ {
 		tags = append(tags, metadata.KeyTerms[i])
 	}
-	
+
 	return tags
 }
 
@@ -684,13 +684,13 @@ func calculateCapitalizedPercent(text string) float64 {
 	if len(words) == 0 {
 		return 0
 	}
-	
+
 	capitalizedCount := 0
 	for _, word := range words {
 		if len(word) > 0 && unicode.IsUpper(rune(word[0])) {
 			capitalizedCount++
 		}
 	}
-	
-	return math.Round((float64(capitalizedCount) / float64(len(words))) * 10000) / 100
+
+	return math.Round((float64(capitalizedCount)/float64(len(words)))*10000) / 100
 }

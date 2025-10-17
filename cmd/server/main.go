@@ -18,11 +18,11 @@ import (
 
 func main() {
 	var (
-		port       = flag.String("port", "8080", "Server port")
-		dbPath     = flag.String("db", "textanalyzer.db", "Database file path")
-		ollamaURL  = flag.String("ollama-url", "http://honker:11434", "Ollama API URL")
+		port        = flag.String("port", "8080", "Server port")
+		dbPath      = flag.String("db", "textanalyzer.db", "Database file path")
+		ollamaURL   = flag.String("ollama-url", "http://honker:11434", "Ollama API URL")
 		ollamaModel = flag.String("ollama-model", "gpt-oss:20b", "Ollama model to use")
-		useOllama  = flag.Bool("use-ollama", true, "Enable Ollama for AI-powered analysis")
+		useOllama   = flag.Bool("use-ollama", true, "Enable Ollama for AI-powered analysis")
 	)
 	flag.Parse()
 
