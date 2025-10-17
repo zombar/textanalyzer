@@ -278,8 +278,9 @@ When Ollama is enabled, the following features use LLM analysis:
 3. **Editorial Analysis** - Unbiased assessment of bias, motivation, and slant
 4. **Tag Generation** - AI-generated tags (up to 5) instead of rule-based tags
 5. **Reference Extraction** - AI-extracted and pruned references with better accuracy
+6. **AI Content Detection** - Determines if text was written by AI with confidence scoring and detailed reasoning
 
-The system gracefully falls back to rule-based analysis if Ollama is unavailable or disabled.
+The system gracefully falls back to rule-based analysis if Ollama is unavailable or disabled. AI detection is only available when Ollama is enabled.
 
 ## Performance Considerations
 

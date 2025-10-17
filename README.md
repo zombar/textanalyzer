@@ -1,6 +1,6 @@
 # Text Analyzer
 
-A comprehensive web-based text analysis tool built in Go that extracts extensive JSON metadata from text, including sentiment analysis, word counts, key phrases, and references to verify.
+A comprehensive web-based text analysis tool built in Go that extracts extensive JSON metadata from text, including sentiment analysis, word counts, key phrases, and references to verify. Now with **AI-powered analysis** using Ollama for enhanced insights.
 
 ## Features
 
@@ -13,29 +13,41 @@ A comprehensive web-based text analysis tool built in Go that extracts extensive
   - Readability scoring (Flesch Reading Ease)
   - Reference extraction for fact-checking
 
+- **AI-Powered Features** (with Ollama)
+  - 3-4 sentence synopsis generation
+  - Text cleaning (removes artifacts and non-relevant content)
+  - Editorial bias and motivation analysis
+  - AI-generated tags (up to 5 high-quality tags)
+  - Enhanced reference extraction with better accuracy
+  - **AI content detection** (determines if text was AI-written)
+
 - **RESTful API**
   - Upload text for analysis
   - Retrieve analysis results
   - Search by tags
+  - Search by reference text
   - List all analyses with pagination
   - Delete analyses
 
 - **Performance**
   - Goroutine-based parallel processing
-  - Efficient SQLite storage
+  - Efficient SQLite storage with searchable references
   - CORS-enabled for web frontend integration
+  - Extended timeouts for AI processing (up to 7 minutes)
 
 - **Database**
   - SQLite with migration system
   - Designed for easy PostgreSQL migration
   - No ORM dependencies
+  - Searchable references table
 
 ## Installation
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - GCC (for SQLite CGO compilation)
+- **(Optional)** Ollama for AI-powered features
 
 ### Setup
 
@@ -50,9 +62,31 @@ go mod download
 # Build the server
 go build -o textanalyzer ./cmd/server
 
-# Run the server
+# Run the server (with Ollama enabled by default)
 ./textanalyzer
+
+# Run without Ollama (rule-based analysis only)
+./textanalyzer -use-ollama=false
 ```
+
+### Ollama Setup (Optional but Recommended)
+
+For AI-powered features:
+
+```bash
+# Install Ollama from https://ollama.ai
+
+# Pull the default model
+ollama pull gpt-oss:20b
+
+# Start Ollama server (if not running)
+ollama serve
+
+# Run text analyzer with custom Ollama configuration
+./textanalyzer -ollama-url=http://localhost:11434 -ollama-model=gpt-oss:20b
+```
+
+See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed Ollama configuration.
 
 ### Build Options
 
@@ -60,8 +94,8 @@ go build -o textanalyzer ./cmd/server
 # Build with custom flags
 go build -o textanalyzer -ldflags="-s -w" ./cmd/server
 
-# Run with custom port and database
-./textanalyzer -port 3000 -db /path/to/database.db
+# Run with custom configuration
+./textanalyzer -port 3000 -db /path/to/database.db -ollama-url=http://custom:11434
 ```
 
 ## Usage
@@ -145,12 +179,24 @@ Response:
     "language": "english",
     "question_count": 1,
     "exclamation_count": 0,
-    "capitalized_percent": 8.5
+    "capitalized_percent": 8.5,
+    "synopsis": "A concise 3-4 sentence summary of the text...",
+    "cleaned_text": "Text with artifacts removed...",
+    "editorial_analysis": "Assessment of bias and motivation...",
+    "ai_detection": {
+      "likelihood": "unlikely",
+      "confidence": "medium",
+      "reasoning": "The text shows natural variations...",
+      "indicators": ["varied sentence structure", "personal voice"],
+      "human_score": 75.5
+    }
   },
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z"
 }
 ```
+
+**Note:** The `synopsis`, `cleaned_text`, `editorial_analysis`, and `ai_detection` fields are only populated when Ollama is enabled.
 
 #### Get Analysis by ID
 
@@ -174,6 +220,14 @@ Query Parameters:
 GET /api/search?tag=positive
 ```
 
+#### Search by Reference
+
+```bash
+GET /api/search/reference?reference=climate+change
+```
+
+Search for analyses containing specific reference text.
+
 #### Delete Analysis
 
 ```bash
@@ -187,8 +241,8 @@ Returns: `204 No Content`
 ### Using cURL
 
 ```bash
-# Analyze text from file
-curl -X POST http://localhost:8080/api/analyze \
+# Analyze text from file (with extended timeout for AI processing)
+curl -m 420 -X POST http://localhost:8080/api/analyze \
   -H "Content-Type: application/json" \
   -d @examples/climate_change.json
 
@@ -197,6 +251,9 @@ curl http://localhost:8080/api/analyses/20250115103000-123456
 
 # Search by tag
 curl "http://localhost:8080/api/search?tag=positive"
+
+# Search by reference text
+curl "http://localhost:8080/api/search/reference?reference=climate"
 
 # List analyses with pagination
 curl "http://localhost:8080/api/analyses?limit=5&offset=0"
