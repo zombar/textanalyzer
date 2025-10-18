@@ -6,7 +6,7 @@ toolchain go1.24.9
 
 require (
 	github.com/ollama/ollama v0.12.6
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.0
 	modernc.org/sqlite v1.39.1
 )
 
