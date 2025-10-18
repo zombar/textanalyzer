@@ -1,8 +1,11 @@
 package analyzer
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/zombar/textanalyzer/internal/ollama"
 )
 
 func TestAnalyze(t *testing.T) {
@@ -295,10 +298,200 @@ func TestCalculateCapitalizedPercent(t *testing.T) {
 	}
 }
 
+func TestTextQualityScoring(t *testing.T) {
+	// This test requires Ollama to be available
+	// It will skip if Ollama is not running
+	ollamaClient, err := ollama.New("http://localhost:11434", "gpt-oss:20b")
+	if err != nil {
+		t.Skip("Ollama client creation failed, skipping test")
+	}
+
+	a := NewWithOllama(ollamaClient)
+
+	text := `Artificial intelligence is revolutionizing how we approach complex problems in science and technology.
+	Machine learning algorithms can now process vast amounts of data to identify patterns that would be impossible
+	for humans to detect manually. This technology has applications in healthcare, climate science, and many other fields.`
+
+	ctx := context.Background()
+	metadata := a.AnalyzeWithContext(ctx, text)
+
+	// Verify quality score is present (only if Ollama is available and working)
+	// Note: This might be nil if Ollama fails
+	if metadata.QualityScore != nil {
+		t.Logf("✓ Quality score present: score=%.2f, recommended=%v",
+			metadata.QualityScore.Score, metadata.QualityScore.IsRecommended)
+
+		// Verify score is within valid range
+		if metadata.QualityScore.Score < 0.0 || metadata.QualityScore.Score > 1.0 {
+			t.Errorf("Score should be between 0.0 and 1.0, got %.2f", metadata.QualityScore.Score)
+		}
+
+		// Verify reason is not empty
+		if metadata.QualityScore.Reason == "" {
+			t.Error("Expected non-empty reason for score")
+		}
+
+		// Verify categories array exists
+		if metadata.QualityScore.Categories == nil {
+			t.Error("Expected categories array to be initialized")
+		}
+
+		// For well-written informative text, we expect a good score
+		if metadata.QualityScore.Score >= 0.7 {
+			t.Logf("✓ High quality text detected: score=%.2f", metadata.QualityScore.Score)
+		}
+	} else {
+		t.Log("⚠ Quality score not present (Ollama may not be available or failed)")
+	}
+}
+
+// TestScoreTextQualityFallbackShort tests fallback scoring for short content
+func TestScoreTextQualityFallbackShort(t *testing.T) {
+	score := scoreTextQualityFallback("Too short", 2, 0)
+
+	if score.Score >= 0.5 {
+		t.Errorf("Expected low score for very short content, got %.2f", score.Score)
+	}
+
+	if !containsStringSlice(score.ProblemsDetected, "too_few_words") && !containsStringSlice(score.ProblemsDetected, "extremely_short") {
+		t.Errorf("Expected problems detected for short content, got: %v", score.ProblemsDetected)
+	}
+
+	if score.IsRecommended {
+		t.Error("Expected short content to not be recommended")
+	}
+}
+
+// TestScoreTextQualityFallbackSpam tests fallback scoring for spam content
+func TestScoreTextQualityFallbackSpam(t *testing.T) {
+	spamText := "Click here! Buy now! Buy now! Limited offer! Act now! Free money! Earn $$$ today!"
+	score := scoreTextQualityFallback(spamText, 13, 50)
+
+	if score.Score >= 0.4 {
+		t.Errorf("Expected very low score for spam, got %.2f", score.Score)
+	}
+
+	if !containsStringSlice(score.ProblemsDetected, "spam_keywords") {
+		t.Errorf("Expected spam_keywords in problems detected, got: %v", score.ProblemsDetected)
+	}
+
+	if !containsStringSlice(score.Categories, "spam") {
+		t.Errorf("Expected 'spam' category, got: %v", score.Categories)
+	}
+
+	if score.IsRecommended {
+		t.Error("Expected spam content to not be recommended")
+	}
+}
+
+// TestScoreTextQualityFallbackQuality tests fallback scoring for quality content
+func TestScoreTextQualityFallbackQuality(t *testing.T) {
+	qualityText := strings.Repeat("This research study demonstrates clear evidence and findings about climate change. The analysis shows important data and results that conclude significant environmental impacts. ", 3)
+	wordCount := len(strings.Fields(qualityText))
+	score := scoreTextQualityFallback(qualityText, wordCount, 65)
+
+	if score.Score < 0.6 {
+		t.Errorf("Expected good score for quality content, got %.2f", score.Score)
+	}
+
+	if !containsStringSlice(score.QualityIndicators, "academic_language") {
+		t.Errorf("Expected academic_language in quality indicators, got: %v", score.QualityIndicators)
+	}
+
+	if !score.IsRecommended {
+		t.Error("Expected quality content to be recommended")
+	}
+
+	if !strings.Contains(score.Reason, "Rule-based") {
+		t.Errorf("Expected reason to mention rule-based assessment, got: %s", score.Reason)
+	}
+}
+
+// TestScoreTextQualityFallbackExcessiveCaps tests fallback scoring for excessive capitalization
+func TestScoreTextQualityFallbackExcessiveCaps(t *testing.T) {
+	capsText := "THIS IS ALL CAPS TEXT SHOUTING AT THE READER ALL THE TIME VERY LOUD AND ANNOYING"
+	wordCount := len(strings.Fields(capsText))
+	score := scoreTextQualityFallback(capsText, wordCount, 50)
+
+	if score.Score >= 0.5 {
+		t.Errorf("Expected low score for excessive caps, got %.2f", score.Score)
+	}
+
+	if !containsStringSlice(score.ProblemsDetected, "excessive_capitalization") {
+		t.Errorf("Expected excessive_capitalization in problems, got: %v", score.ProblemsDetected)
+	}
+}
+
+// TestScoreTextQualityFallbackGibberish tests fallback scoring for gibberish content
+func TestScoreTextQualityFallbackGibberish(t *testing.T) {
+	gibberishText := "aaaaa bbbbb ccccc ddddd eeeee fffff ggggg hhhhh iiiii jjjjj kkkkk lllll mmmmm nnnnn"
+	wordCount := len(strings.Fields(gibberishText))
+	score := scoreTextQualityFallback(gibberishText, wordCount, 50)
+
+	if score.Score >= 0.4 {
+		t.Errorf("Expected low score for gibberish, got %.2f", score.Score)
+	}
+
+	if !containsStringSlice(score.ProblemsDetected, "excessive_character_repetition") {
+		t.Errorf("Expected excessive_character_repetition in problems, got: %v", score.ProblemsDetected)
+	}
+
+	if !containsStringSlice(score.Categories, "incoherent") {
+		t.Errorf("Expected 'incoherent' category, got: %v", score.Categories)
+	}
+}
+
+// TestAnalyzeWithFallbackScoring tests that analysis works with fallback scoring when Ollama is down
+func TestAnalyzeWithFallbackScoring(t *testing.T) {
+	// Create analyzer WITHOUT Ollama client (will use fallback)
+	a := New()
+
+	text := strings.Repeat("This is a well-written article about important research findings. The study demonstrates clear evidence of significant results. ", 5)
+
+	metadata := a.Analyze(text)
+
+	// Verify quality score is present (from fallback)
+	if metadata.QualityScore == nil {
+		t.Fatal("Expected QualityScore to be present from fallback scoring")
+	}
+
+	// Score should be decent for quality content
+	if metadata.QualityScore.Score < 0.5 {
+		t.Errorf("Expected reasonable fallback score for good content, got %.2f", metadata.QualityScore.Score)
+	}
+
+	// Reason should indicate rule-based assessment
+	if !strings.Contains(metadata.QualityScore.Reason, "Rule-based") {
+		t.Errorf("Expected reason to indicate rule-based fallback, got: %s", metadata.QualityScore.Reason)
+	}
+
+	// Categories should not be empty
+	if len(metadata.QualityScore.Categories) == 0 {
+		t.Error("Expected categories from fallback scoring")
+	}
+
+	// Verify AIUsed is false for rule-based fallback
+	if metadata.QualityScore.AIUsed {
+		t.Error("Expected AIUsed to be false for rule-based fallback")
+	}
+
+	t.Logf("✓ Fallback quality score: %.2f (recommended: %v, ai_used: %v)",
+		metadata.QualityScore.Score, metadata.QualityScore.IsRecommended, metadata.QualityScore.AIUsed)
+}
+
+func containsStringSlice(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 func BenchmarkAnalyze(b *testing.B) {
 	a := New()
-	text := `Climate change is a pressing global issue. Scientists have documented a 1.1°C increase in global temperatures since 1880. 
-	The effects are devastating: rising sea levels, extreme weather events, and loss of biodiversity. 
+	text := `Climate change is a pressing global issue. Scientists have documented a 1.1°C increase in global temperatures since 1880.
+	The effects are devastating: rising sea levels, extreme weather events, and loss of biodiversity.
 	According to recent studies, we need to reduce carbon emissions by 45% by 2030 to avoid catastrophic consequences.
 	Many experts believe this is achievable with renewable energy adoption.`
 

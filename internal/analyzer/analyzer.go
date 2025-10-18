@@ -155,11 +155,40 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			log.Printf("AI detection failed: %v", err)
 		}
 
+		// Text quality scoring (with fallback to rule-based scoring)
+		log.Println("Scoring text quality...")
+		if qualityScore, err := a.ollamaClient.ScoreTextQuality(ctx, text); err == nil {
+			metadata.QualityScore = &models.TextQualityScore{
+				Score:             qualityScore.Score,
+				Reason:            qualityScore.Reason,
+				Categories:        qualityScore.Categories,
+				IsRecommended:     qualityScore.Score >= 0.5, // Default threshold
+				QualityIndicators: qualityScore.QualityIndicators,
+				ProblemsDetected:  qualityScore.ProblemsDetected,
+				AIUsed:            true, // AI-powered scoring
+			}
+			log.Printf("Text quality scored (AI): score=%.2f, recommended=%v",
+				qualityScore.Score, metadata.QualityScore.IsRecommended)
+		} else {
+			// Fallback to rule-based scoring when Ollama is unavailable
+			log.Printf("Ollama scoring failed, using rule-based fallback: %v", err)
+			fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+			metadata.QualityScore = &fallbackScore
+			log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+				fallbackScore.Score, fallbackScore.IsRecommended)
+		}
+
 	} else {
 		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
+
+		// Add rule-based quality scoring
+		fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+		metadata.QualityScore = &fallbackScore
+		log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+			fallbackScore.Score, fallbackScore.IsRecommended)
 	}
 
 	// Language indicators
@@ -693,4 +722,205 @@ func calculateCapitalizedPercent(text string) float64 {
 	}
 
 	return math.Round((float64(capitalizedCount)/float64(len(words)))*10000) / 100
+}
+
+// scoreTextQualityFallback provides rule-based text quality scoring when Ollama is unavailable
+func scoreTextQualityFallback(text string, wordCount int, readabilityScore float64) models.TextQualityScore {
+	score := 0.5 // Start with neutral score
+	categories := []string{}
+	qualityIndicators := []string{}
+	problemsDetected := []string{}
+	reasons := []string{}
+
+	textLower := strings.ToLower(text)
+
+	// Check for very short content
+	if len(text) < 50 {
+		score = 0.1
+		categories = append(categories, "too_short", "low_quality")
+		problemsDetected = append(problemsDetected, "extremely_short")
+		reasons = append(reasons, "Content too short (< 50 characters)")
+		return models.TextQualityScore{
+			Score:             score,
+			Reason:            strings.Join(reasons, "; "),
+			Categories:        categories,
+			IsRecommended:     false,
+			QualityIndicators: qualityIndicators,
+			ProblemsDetected:  problemsDetected,
+			AIUsed:            false, // Rule-based fallback
+		}
+	}
+
+	if wordCount < 20 {
+		score -= 0.3
+		categories = append(categories, "minimal_content")
+		problemsDetected = append(problemsDetected, "too_few_words")
+		reasons = append(reasons, "Very few words")
+	} else if wordCount < 50 {
+		score -= 0.1
+		reasons = append(reasons, "Short content")
+	} else if wordCount > 200 {
+		score += 0.2
+		categories = append(categories, "informative")
+		qualityIndicators = append(qualityIndicators, "substantial_length")
+		reasons = append(reasons, "Substantial content")
+	}
+
+	// Check for spam indicators
+	spamKeywords := []string{"click here", "buy now", "limited offer", "act now", "call now", "free money", "earn $$$"}
+	spamCount := 0
+	for _, keyword := range spamKeywords {
+		spamCount += strings.Count(textLower, keyword)
+	}
+
+	if spamCount > 3 {
+		score -= 0.4
+		categories = append(categories, "spam", "low_quality")
+		problemsDetected = append(problemsDetected, "spam_keywords", "promotional")
+		reasons = append(reasons, "Multiple spam indicators")
+	} else if spamCount > 0 {
+		score -= 0.2
+		problemsDetected = append(problemsDetected, "some_promotional_language")
+	}
+
+	// Check for excessive punctuation
+	exclamationCount := strings.Count(text, "!")
+
+	if exclamationCount > wordCount/10 && exclamationCount > 5 {
+		score -= 0.2
+		problemsDetected = append(problemsDetected, "excessive_exclamations")
+		reasons = append(reasons, "Excessive exclamation marks")
+	}
+
+	// Check for all caps (shouting)
+	upperRatio := 0.0
+	upperCount := 0
+	lowerCount := 0
+	for _, r := range text {
+		if unicode.IsUpper(r) {
+			upperCount++
+		} else if unicode.IsLower(r) {
+			lowerCount++
+		}
+	}
+	if upperCount+lowerCount > 0 {
+		upperRatio = float64(upperCount) / float64(upperCount+lowerCount)
+	}
+
+	if upperRatio > 0.5 {
+		score -= 0.3
+		problemsDetected = append(problemsDetected, "excessive_capitalization")
+		reasons = append(reasons, "Excessive capitalization (shouting)")
+	}
+
+	// Check readability
+	if readabilityScore > 0 {
+		if readabilityScore >= 60 && readabilityScore <= 70 {
+			score += 0.1
+			qualityIndicators = append(qualityIndicators, "good_readability")
+		} else if readabilityScore < 30 || readabilityScore > 80 {
+			score -= 0.1
+			if readabilityScore < 30 {
+				problemsDetected = append(problemsDetected, "difficult_to_read")
+			}
+		}
+	}
+
+	// Check for coherence indicators (sentences, paragraphs)
+	sentenceCount := strings.Count(text, ".") + strings.Count(text, "!") + strings.Count(text, "?")
+	if sentenceCount == 0 {
+		sentenceCount = 1
+	}
+
+	avgWordsPerSentence := float64(wordCount) / float64(sentenceCount)
+	if avgWordsPerSentence >= 10 && avgWordsPerSentence <= 25 {
+		score += 0.1
+		qualityIndicators = append(qualityIndicators, "good_sentence_length")
+	} else if avgWordsPerSentence < 5 || avgWordsPerSentence > 40 {
+		score -= 0.1
+		if avgWordsPerSentence < 5 {
+			problemsDetected = append(problemsDetected, "choppy_sentences")
+		} else {
+			problemsDetected = append(problemsDetected, "overly_long_sentences")
+		}
+	}
+
+	// Check for gibberish (excessive repeated characters)
+	repeatedChars := 0
+	for i := 0; i < len(text)-2; i++ {
+		if text[i] == text[i+1] && text[i] == text[i+2] {
+			repeatedChars++
+		}
+	}
+
+	if repeatedChars > wordCount/5 {
+		score -= 0.3
+		categories = append(categories, "incoherent", "low_quality")
+		problemsDetected = append(problemsDetected, "excessive_character_repetition", "possibly_gibberish")
+		reasons = append(reasons, "Excessive repeated characters (gibberish)")
+	}
+
+	// Check for educational/informative keywords
+	qualityKeywords := []string{"research", "study", "analysis", "demonstrate", "evidence", "conclude", "data", "results", "findings"}
+	qualityCount := 0
+	for _, keyword := range qualityKeywords {
+		if strings.Contains(textLower, keyword) {
+			qualityCount++
+		}
+	}
+
+	if qualityCount >= 3 {
+		score += 0.2
+		categories = append(categories, "informative", "educational")
+		qualityIndicators = append(qualityIndicators, "academic_language")
+		reasons = append(reasons, "Contains informative/academic language")
+	}
+
+	// Ensure score is within bounds
+	if score < 0.0 {
+		score = 0.0
+	}
+	if score > 1.0 {
+		score = 1.0
+	}
+
+	// Determine if recommended
+	isRecommended := score >= 0.5
+
+	// Build reason string
+	var reason string
+	if len(reasons) == 0 {
+		reason = "Rule-based assessment (Ollama unavailable)"
+	} else {
+		reason = "Rule-based: " + strings.Join(reasons, "; ")
+	}
+
+	// Ensure categories based on score
+	if len(categories) == 0 {
+		if score >= 0.7 {
+			categories = []string{"informative", "good_quality"}
+		} else if score >= 0.5 {
+			categories = []string{"acceptable"}
+		} else {
+			categories = []string{"low_quality"}
+		}
+	}
+
+	// Ensure slices are not nil
+	if qualityIndicators == nil {
+		qualityIndicators = []string{}
+	}
+	if problemsDetected == nil {
+		problemsDetected = []string{}
+	}
+
+	return models.TextQualityScore{
+		Score:             score,
+		Reason:            reason,
+		Categories:        categories,
+		IsRecommended:     isRecommended,
+		QualityIndicators: qualityIndicators,
+		ProblemsDetected:  problemsDetected,
+		AIUsed:            false, // Rule-based fallback
+	}
 }

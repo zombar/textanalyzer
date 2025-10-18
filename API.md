@@ -93,6 +93,15 @@ Content-Type: application/json
       "reasoning": "Natural variations in sentence structure...",
       "indicators": ["varied sentence structure", "personal voice"],
       "human_score": 75.5
+    },
+    "quality_score": {
+      "score": 0.85,
+      "reason": "Well-written, informative content with clear structure",
+      "categories": ["informative", "well_written"],
+      "is_recommended": true,
+      "quality_indicators": ["clear_structure", "good_grammar", "valuable_insights"],
+      "problems_detected": [],
+      "ai_used": true
     }
   },
   "created_at": "2025-01-15T10:30:00Z",
@@ -100,7 +109,7 @@ Content-Type: application/json
 }
 ```
 
-**Note:** AI-specific fields (`synopsis`, `cleaned_text`, `editorial_analysis`, `ai_detection`) are only present when Ollama is enabled.
+**Note:** AI-specific fields (`synopsis`, `cleaned_text`, `editorial_analysis`, `ai_detection`) are only present when Ollama is enabled. The `quality_score` field is always present, using AI-powered analysis when Ollama is available or rule-based heuristics as fallback.
 
 **Error Responses:**
 
@@ -394,6 +403,31 @@ type AIDetection struct {
     HumanScore  float64  `json:"human_score"` // 0-100
 }
 ```
+
+### TextQualityScore
+
+Quality assessment for text content.
+
+```go
+type TextQualityScore struct {
+    Score               float64  `json:"score"`                // 0.0 to 1.0, higher is better
+    Reason              string   `json:"reason"`               // Explanation for the score
+    Categories          []string `json:"categories"`           // Content categories
+    IsRecommended       bool     `json:"is_recommended"`       // Whether the text is recommended
+    QualityIndicators   []string `json:"quality_indicators"`   // Positive quality indicators
+    ProblemsDetected    []string `json:"problems_detected"`    // Issues found in the text
+    AIUsed              bool     `json:"ai_used"`              // Whether AI was used for scoring
+}
+```
+
+**Fields:**
+- `score` - Quality score from 0.0 (lowest) to 1.0 (highest)
+- `reason` - Explanation for the assigned score
+- `categories` - Content categories detected (e.g., "informative", "spam", "low_quality")
+- `is_recommended` - Whether the text meets quality standards
+- `quality_indicators` - Positive quality signals found (e.g., "clear_structure", "good_grammar")
+- `problems_detected` - Issues found (e.g., "excessive_capitalization", "spam_keywords")
+- `ai_used` - Whether AI (Ollama) was used for scoring (`true`) or rule-based fallback (`false`)
 
 ---
 
