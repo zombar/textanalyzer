@@ -59,6 +59,9 @@ type Metadata struct {
 	CleanedText       string            `json:"cleaned_text"`       // Text with artifacts removed
 	EditorialAnalysis string            `json:"editorial_analysis"` // Bias, motivation, and slant analysis
 	AIDetection       AIDetectionResult `json:"ai_detection"`       // AI-generated content detection
+
+	// Quality scoring
+	QualityScore *TextQualityScore `json:"quality_score,omitempty"` // Text quality assessment
 }
 
 // WordFrequency represents a word and its frequency
@@ -88,4 +91,15 @@ type AIDetectionResult struct {
 	Reasoning  string   `json:"reasoning"`   // Explanation of the assessment
 	Indicators []string `json:"indicators"`  // Specific indicators found
 	HumanScore float64  `json:"human_score"` // 0-100, higher means more likely human-written
+}
+
+// TextQualityScore represents quality assessment for text content
+type TextQualityScore struct {
+	Score               float64  `json:"score"`                // 0.0 to 1.0, higher is better quality
+	Reason              string   `json:"reason"`               // Explanation for the score
+	Categories          []string `json:"categories"`           // Content categories (e.g., "informative", "spam", "low_quality")
+	IsRecommended       bool     `json:"is_recommended"`       // Whether the text is recommended
+	QualityIndicators   []string `json:"quality_indicators"`   // Positive quality indicators
+	ProblemsDetected    []string `json:"problems_detected"`    // Issues found in the text
+	AIUsed              bool     `json:"ai_used"`              // Whether AI (Ollama) was used for scoring (true) or rule-based fallback (false)
 }

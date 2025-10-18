@@ -270,3 +270,106 @@ Return ONLY the JSON object, nothing else:`, text)
 
 	return &result, nil
 }
+
+// TextQualityScoreResult represents the quality score for text content
+type TextQualityScoreResult struct {
+	Score             float64  `json:"score"`
+	Reason            string   `json:"reason"`
+	Categories        []string `json:"categories"`
+	QualityIndicators []string `json:"quality_indicators"`
+	ProblemsDetected  []string `json:"problems_detected"`
+}
+
+// ScoreTextQuality analyzes and scores the quality of text content
+func (c *Client) ScoreTextQuality(ctx context.Context, text string) (*TextQualityScoreResult, error) {
+	prompt := fmt.Sprintf(`You are a content quality assessment assistant. Analyze the following text and determine its quality for information and knowledge purposes.
+
+Evaluate the text and assign a quality score from 0.0 to 1.0 where:
+- 1.0 = Excellent quality (well-written, informative, coherent, valuable)
+- 0.7-0.9 = Good quality (useful content with minor issues)
+- 0.4-0.6 = Moderate quality (some value but significant issues)
+- 0.0-0.3 = Low quality (spam, incoherent, useless)
+
+REJECT (score 0.0-0.3) the following types of content:
+- Spam, advertisements, or promotional content
+- Incoherent or nonsensical text
+- Extremely short or trivial content (< 50 meaningful characters)
+- Content that is mostly punctuation, symbols, or gibberish
+- Duplicate or repetitive content
+- Content that is purely links or navigation
+- Offensive, hateful, or harmful content
+
+MODERATE (score 0.4-0.6) content with:
+- Poor grammar or structure but some useful information
+- Incomplete thoughts or fragmented content
+- Mixed quality (good and bad sections)
+- Excessive formatting issues
+
+ACCEPT (score 0.7-1.0) content that is:
+- Well-written and coherent
+- Informative and valuable
+- Properly structured
+- Original and thoughtful
+- Educational or enlightening
+
+Provide your assessment in JSON format:
+{
+  "score": 0.0-1.0,
+  "reason": "Brief explanation of the score",
+  "categories": ["category1", "category2"],
+  "quality_indicators": ["indicator1", "indicator2"],
+  "problems_detected": ["problem1", "problem2"]
+}
+
+Categories should include applicable labels: "informative", "educational", "well_written", "coherent", "spam", "low_quality", "incoherent", "promotional", etc.
+
+Quality indicators list positive aspects: "clear_structure", "good_grammar", "valuable_insights", "well_researched", etc.
+
+Problems detected list issues found: "poor_grammar", "incoherent", "too_short", "spam_like", "repetitive", etc.
+
+Text to analyze:
+%s
+
+Return ONLY the JSON object, nothing else:`, text)
+
+	response, err := c.GenerateResponse(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse JSON response
+	var result TextQualityScoreResult
+
+	// Try to find JSON object in response
+	start := strings.Index(response, "{")
+	end := strings.LastIndex(response, "}")
+	if start >= 0 && end > start {
+		jsonStr := response[start : end+1]
+		if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+			return nil, fmt.Errorf("failed to parse quality score JSON: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("no JSON object found in response")
+	}
+
+	// Ensure score is within bounds
+	if result.Score < 0.0 {
+		result.Score = 0.0
+	}
+	if result.Score > 1.0 {
+		result.Score = 1.0
+	}
+
+	// Ensure slices are not nil
+	if result.Categories == nil {
+		result.Categories = []string{}
+	}
+	if result.QualityIndicators == nil {
+		result.QualityIndicators = []string{}
+	}
+	if result.ProblemsDetected == nil {
+		result.ProblemsDetected = []string{}
+	}
+
+	return &result, nil
+}
