@@ -9,7 +9,7 @@ services:
       - PORT=8080
       - DB_PATH=/data/textanalyzer.db
       - USE_OLLAMA=true
-      - OLLAMA_URL=http://honker:11434
+      - OLLAMA_URL=http://100.64.0.2:11434
       - OLLAMA_MODEL=gpt-oss:20b
     restart: unless-stopped
     healthcheck:
