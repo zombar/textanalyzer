@@ -1,6 +1,6 @@
-# API Reference
+# TextAnalyzer API Reference
 
-Complete API reference for the Text Analyzer service.
+REST API documentation for the text analysis service.
 
 ## Base URL
 
@@ -8,22 +8,18 @@ Complete API reference for the Text Analyzer service.
 http://localhost:8080
 ```
 
-## Authentication
-
-Currently, the API does not require authentication. For production use, consider implementing JWT tokens or API keys.
-
----
-
 ## Endpoints
 
 ### Health Check
 
 Check if the service is running.
 
-**Endpoint:** `GET /health`
+**Request:**
+```http
+GET /health
+```
 
-**Response:** `200 OK`
-
+**Response:**
 ```json
 {
   "status": "ok",
@@ -37,29 +33,20 @@ Check if the service is running.
 
 Submit text for comprehensive analysis.
 
-**Endpoint:** `POST /api/analyze`
-
-**Headers:**
-```
+**Request:**
+```http
+POST /api/analyze
 Content-Type: application/json
-```
 
-**Request Body:**
-
-```json
 {
   "text": "Your text content here..."
 }
 ```
 
 **Parameters:**
+- `text` (string, required) - Text to analyze (1-1000000 characters)
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| text | string | Yes | The text to analyze (1-1000000 characters) |
-
-**Response:** `201 Created`
-
+**Response:**
 ```json
 {
   "id": "20250115103000-123456",
@@ -72,22 +59,12 @@ Content-Type: application/json
     "average_word_length": 5.2,
     "sentiment": "positive",
     "sentiment_score": 0.35,
-    "top_words": [
-      {
-        "word": "example",
-        "count": 5
-      }
-    ],
-    "top_phrases": [
-      {
-        "phrase": "text analysis",
-        "count": 3
-      }
-    ],
+    "top_words": [{"word": "example", "count": 5}],
+    "top_phrases": [{"phrase": "text analysis", "count": 3}],
     "unique_words": 20,
     "key_terms": ["analysis", "metadata"],
     "named_entities": ["John Smith", "New York"],
-    "potential_dates": ["2024-01-15", "March 25, 2024"],
+    "potential_dates": ["2024-01-15"],
     "potential_urls": ["https://example.com"],
     "email_addresses": ["contact@example.com"],
     "readability_score": 65.5,
@@ -96,7 +73,7 @@ Content-Type: application/json
     "avg_sentence_length": 8.33,
     "references": [
       {
-        "text": "Studies show that 75% of users prefer",
+        "text": "Studies show that 75% of users",
         "type": "statistic",
         "context": "...surrounding context...",
         "confidence": "medium"
@@ -106,34 +83,51 @@ Content-Type: application/json
     "language": "english",
     "question_count": 2,
     "exclamation_count": 1,
-    "capitalized_percent": 12.5
+    "capitalized_percent": 12.5,
+    "synopsis": "AI-generated 3-4 sentence summary...",
+    "cleaned_text": "Text with artifacts removed...",
+    "editorial_analysis": "Assessment of bias and motivation...",
+    "ai_detection": {
+      "likelihood": "unlikely",
+      "confidence": "medium",
+      "reasoning": "Natural variations in sentence structure...",
+      "indicators": ["varied sentence structure", "personal voice"],
+      "human_score": 75.5
+    }
   },
   "created_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T10:30:00Z"
 }
 ```
 
+**Note:** AI-specific fields (`synopsis`, `cleaned_text`, `editorial_analysis`, `ai_detection`) are only present when Ollama is enabled.
+
 **Error Responses:**
 
-`400 Bad Request` - Invalid request body or empty text
+`400 Bad Request`:
 ```json
 {
   "error": "Text field is required"
 }
 ```
 
-`408 Request Timeout` - Analysis took too long
+`408 Request Timeout`:
 ```json
 {
   "error": "Analysis timeout"
 }
 ```
 
-`500 Internal Server Error` - Server error
-```json
-{
-  "error": "Failed to save analysis"
-}
+**Example:**
+```bash
+curl -X POST http://localhost:8080/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your text here..."}'
+
+# With timeout for AI processing
+curl -m 420 -X POST http://localhost:8080/api/analyze \
+  -H "Content-Type: application/json" \
+  -d @examples/climate_change.json
 ```
 
 ---
@@ -142,16 +136,12 @@ Content-Type: application/json
 
 Retrieve a specific analysis by ID.
 
-**Endpoint:** `GET /api/analyses/{id}`
+**Request:**
+```http
+GET /api/analyses/{id}
+```
 
-**URL Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | string | The unique analysis ID |
-
-**Response:** `200 OK`
-
+**Response:**
 ```json
 {
   "id": "20250115103000-123456",
@@ -162,13 +152,16 @@ Retrieve a specific analysis by ID.
 }
 ```
 
-**Error Responses:**
-
-`404 Not Found` - Analysis doesn't exist
+**Error Response (404):**
 ```json
 {
   "error": "analysis not found"
 }
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/analyses/20250115103000-123456
 ```
 
 ---
@@ -177,19 +170,16 @@ Retrieve a specific analysis by ID.
 
 Retrieve all analyses with pagination.
 
-**Endpoint:** `GET /api/analyses`
+**Request:**
+```http
+GET /api/analyses?limit=10&offset=0
+```
 
 **Query Parameters:**
+- `limit` (integer, optional) - Number of results (default: 10, max: 100)
+- `offset` (integer, optional) - Number to skip (default: 0)
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| limit | integer | 10 | Number of results to return (1-100) |
-| offset | integer | 0 | Number of results to skip |
-
-**Example:** `GET /api/analyses?limit=20&offset=40`
-
-**Response:** `200 OK`
-
+**Response:**
 ```json
 [
   {
@@ -198,39 +188,32 @@ Retrieve all analyses with pagination.
     "metadata": { ... },
     "created_at": "2025-01-15T10:30:00Z",
     "updated_at": "2025-01-15T10:30:00Z"
-  },
-  {
-    "id": "20250115102500-789012",
-    "text": "...",
-    "metadata": { ... },
-    "created_at": "2025-01-15T10:25:00Z",
-    "updated_at": "2025-01-15T10:25:00Z"
   }
 ]
 ```
 
-**Notes:**
-- Results are ordered by `created_at` descending (newest first)
-- Returns empty array `[]` if no results
+Results are ordered by `created_at` descending (newest first). Returns empty array if no results.
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/analyses?limit=5&offset=0"
+```
 
 ---
 
 ### Search by Tag
 
-Find analyses that have a specific tag.
+Find analyses with a specific tag.
 
-**Endpoint:** `GET /api/search`
+**Request:**
+```http
+GET /api/search?tag=positive
+```
 
 **Query Parameters:**
+- `tag` (string, required) - Tag to search for (case-sensitive)
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| tag | string | Yes | Tag to search for (case-sensitive) |
-
-**Example:** `GET /api/search?tag=positive`
-
-**Response:** `200 OK`
-
+**Response:**
 ```json
 [
   {
@@ -246,23 +229,66 @@ Find analyses that have a specific tag.
 ]
 ```
 
-**Error Responses:**
-
-`400 Bad Request` - Missing tag parameter
+**Error Response (400):**
 ```json
 {
   "error": "Tag parameter is required"
 }
 ```
 
-**Common Tags:**
+**Common Auto-Generated Tags:**
+- **Sentiment**: positive, negative, neutral
+- **Length**: short (<100 words), medium (100-500), long (>500)
+- **Readability**: very_easy, easy, fairly_easy, standard, fairly_difficult, difficult, very_difficult
+- **Content Type**: faq (many questions), web-content (many URLs), research (many references)
+- **Topics**: Top 3 key terms from text
 
-Auto-generated tags include:
-- **Sentiment**: `positive`, `negative`, `neutral`
-- **Length**: `short` (<100 words), `medium` (100-500 words), `long` (>500 words)
-- **Readability**: `very_easy`, `easy`, `fairly_easy`, `standard`, `fairly_difficult`, `difficult`, `very_difficult`
-- **Content Type**: `faq` (many questions), `web-content` (many URLs), `research` (many references)
-- **Topics**: Top 3 key terms from the text
+**Example:**
+```bash
+curl "http://localhost:8080/api/search?tag=positive"
+```
+
+---
+
+### Search by Reference
+
+Find analyses containing specific reference text.
+
+**Request:**
+```http
+GET /api/search/reference?reference=climate+change
+```
+
+**Query Parameters:**
+- `reference` (string, required) - Reference text to search for
+
+**Response:**
+```json
+[
+  {
+    "id": "20250115103000-123456",
+    "text": "...",
+    "metadata": {
+      "references": [
+        {
+          "text": "climate change affects 75% of regions",
+          "type": "statistic",
+          "context": "...",
+          "confidence": "high"
+        }
+      ],
+      ...
+    },
+    "created_at": "2025-01-15T10:30:00Z",
+    "updated_at": "2025-01-15T10:30:00Z"
+  }
+]
+```
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/search/reference?reference=climate"
+```
 
 ---
 
@@ -270,282 +296,302 @@ Auto-generated tags include:
 
 Delete a specific analysis.
 
-**Endpoint:** `DELETE /api/analyses/{id}`
+**Request:**
+```http
+DELETE /api/analyses/{id}
+```
 
-**URL Parameters:**
+**Response:**
+```
+204 No Content
+```
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| id | string | The unique analysis ID |
-
-**Response:** `204 No Content`
-
-No response body
-
-**Error Responses:**
-
-`404 Not Found` - Analysis doesn't exist
+**Error Response (404):**
 ```json
 {
   "error": "analysis not found"
 }
 ```
 
-**Note:** This operation also deletes all associated tags (cascade delete).
+This operation also deletes all associated tags (cascade delete).
+
+**Example:**
+```bash
+curl -X DELETE http://localhost:8080/api/analyses/20250115103000-123456
+```
 
 ---
 
 ## Data Types
 
-### Analysis Object
+### Analysis
 
-```typescript
-{
-  id: string,              // Unique identifier
-  text: string,            // Original text
-  metadata: Metadata,      // Analysis results
-  created_at: string,      // ISO 8601 timestamp
-  updated_at: string       // ISO 8601 timestamp
+```go
+type Analysis struct {
+    ID        string    `json:"id"`
+    Text      string    `json:"text"`
+    Metadata  Metadata  `json:"metadata"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
 }
 ```
 
-### Metadata Object
+### Metadata
 
-```typescript
-{
-  character_count: number,
-  word_count: number,
-  sentence_count: number,
-  paragraph_count: number,
-  average_word_length: number,
-  sentiment: "positive" | "negative" | "neutral",
-  sentiment_score: number,  // -1.0 to 1.0
-  top_words: WordFrequency[],
-  top_phrases: PhraseInfo[],
-  unique_words: number,
-  key_terms: string[],
-  named_entities: string[],
-  potential_dates: string[],
-  potential_urls: string[],
-  email_addresses: string[],
-  readability_score: number,  // 0-100
-  readability_level: string,
-  complex_word_count: number,
-  avg_sentence_length: number,
-  references: Reference[],
-  tags: string[],
-  language: string,
-  question_count: number,
-  exclamation_count: number,
-  capitalized_percent: number
+```go
+type Metadata struct {
+    CharacterCount       int           `json:"character_count"`
+    WordCount            int           `json:"word_count"`
+    SentenceCount        int           `json:"sentence_count"`
+    ParagraphCount       int           `json:"paragraph_count"`
+    AverageWordLength    float64       `json:"average_word_length"`
+    Sentiment            string        `json:"sentiment"`
+    SentimentScore       float64       `json:"sentiment_score"`
+    TopWords             []WordCount   `json:"top_words"`
+    TopPhrases           []PhraseCount `json:"top_phrases"`
+    UniqueWords          int           `json:"unique_words"`
+    KeyTerms             []string      `json:"key_terms"`
+    NamedEntities        []string      `json:"named_entities"`
+    PotentialDates       []string      `json:"potential_dates"`
+    PotentialURLs        []string      `json:"potential_urls"`
+    EmailAddresses       []string      `json:"email_addresses"`
+    ReadabilityScore     float64       `json:"readability_score"`
+    ReadabilityLevel     string        `json:"readability_level"`
+    ComplexWordCount     int           `json:"complex_word_count"`
+    AvgSentenceLength    float64       `json:"avg_sentence_length"`
+    References           []Reference   `json:"references"`
+    Tags                 []string      `json:"tags"`
+    Language             string        `json:"language"`
+    QuestionCount        int           `json:"question_count"`
+    ExclamationCount     int           `json:"exclamation_count"`
+    CapitalizedPercent   float64       `json:"capitalized_percent"`
+    Synopsis             string        `json:"synopsis,omitempty"`
+    CleanedText          string        `json:"cleaned_text,omitempty"`
+    EditorialAnalysis    string        `json:"editorial_analysis,omitempty"`
+    AIDetection          *AIDetection  `json:"ai_detection,omitempty"`
 }
 ```
 
-### WordFrequency Object
+### Reference
 
-```typescript
-{
-  word: string,
-  count: number
+```go
+type Reference struct {
+    Text       string `json:"text"`
+    Type       string `json:"type"`        // "statistic", "quote", "claim"
+    Context    string `json:"context"`
+    Confidence string `json:"confidence"`  // "high", "medium", "low"
 }
 ```
 
-### PhraseInfo Object
+### AIDetection
 
-```typescript
-{
-  phrase: string,
-  count: number
-}
-```
-
-### Reference Object
-
-```typescript
-{
-  text: string,                              // The claim or statistic
-  type: "statistic" | "quote" | "claim" | "citation",
-  context: string,                           // Surrounding text
-  confidence: "high" | "medium" | "low"      // Confidence level
+```go
+type AIDetection struct {
+    Likelihood  string   `json:"likelihood"`  // "likely", "unlikely", "uncertain"
+    Confidence  string   `json:"confidence"`  // "high", "medium", "low"
+    Reasoning   string   `json:"reasoning"`
+    Indicators  []string `json:"indicators"`
+    HumanScore  float64  `json:"human_score"` // 0-100
 }
 ```
 
 ---
 
-## Rate Limiting
+## Error Responses
 
-Currently, no rate limiting is implemented. For production use, consider implementing:
-- Per-IP rate limiting
-- API key-based quotas
-- Throttling for expensive operations
-
----
-
-## Error Handling
-
-All errors follow this format:
+All errors return JSON with an `error` field:
 
 ```json
 {
-  "error": "Human-readable error message"
+  "error": "descriptive error message"
 }
 ```
 
-### HTTP Status Codes
-
-| Code | Meaning |
-|------|---------|
-| 200 | Success |
-| 201 | Created successfully |
-| 204 | Success with no content |
-| 400 | Bad request (invalid input) |
-| 404 | Resource not found |
-| 405 | Method not allowed |
-| 408 | Request timeout |
-| 500 | Internal server error |
+**HTTP Status Codes:**
+- `200 OK` - Success
+- `201 Created` - Analysis created
+- `204 No Content` - Successful deletion
+- `400 Bad Request` - Invalid request
+- `404 Not Found` - Resource not found
+- `408 Request Timeout` - Analysis timeout
+- `500 Internal Server Error` - Server error
 
 ---
 
-## CORS
+## Integration Examples
 
-The API supports CORS with the following configuration:
-- **Allowed Origins**: All (`*`)
-- **Allowed Methods**: GET, POST, PUT, DELETE, OPTIONS
-- **Allowed Headers**: All
-- **Credentials**: Supported
+### JavaScript/TypeScript
 
----
-
-## Examples
-
-### cURL Examples
-
-```bash
-# Analyze text
-curl -X POST http://localhost:8080/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"text": "This is a test sentence."}'
-
-# Get analysis
-curl http://localhost:8080/api/analyses/20250115103000-123456
-
-# List with pagination
-curl "http://localhost:8080/api/analyses?limit=5&offset=10"
-
-# Search by tag
-curl "http://localhost:8080/api/search?tag=positive"
-
-# Delete
-curl -X DELETE http://localhost:8080/api/analyses/20250115103000-123456
-```
-
-### JavaScript Examples
-
-```javascript
+```typescript
 // Analyze text
-async function analyzeText(text) {
+async function analyzeText(text: string): Promise<Analysis> {
   const response = await fetch('http://localhost:8080/api/analyze', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
-  return await response.json();
+  return response.json();
 }
 
-// Get analysis
-async function getAnalysis(id) {
+// Get analysis by ID
+async function getAnalysis(id: string): Promise<Analysis> {
   const response = await fetch(`http://localhost:8080/api/analyses/${id}`);
-  return await response.json();
+  return response.json();
 }
 
 // Search by tag
-async function searchByTag(tag) {
-  const response = await fetch(
-    `http://localhost:8080/api/search?tag=${encodeURIComponent(tag)}`
-  );
-  return await response.json();
+async function searchByTag(tag: string): Promise<Analysis[]> {
+  const response = await fetch(`http://localhost:8080/api/search?tag=${encodeURIComponent(tag)}`);
+  return response.json();
 }
 
-// List with pagination
-async function listAnalyses(limit = 10, offset = 0) {
+// List analyses
+async function listAnalyses(limit = 10, offset = 0): Promise<Analysis[]> {
   const response = await fetch(
     `http://localhost:8080/api/analyses?limit=${limit}&offset=${offset}`
   );
-  return await response.json();
+  return response.json();
 }
 
 // Delete analysis
-async function deleteAnalysis(id) {
-  const response = await fetch(
-    `http://localhost:8080/api/analyses/${id}`,
-    { method: 'DELETE' }
-  );
-  return response.status === 204;
+async function deleteAnalysis(id: string): Promise<void> {
+  await fetch(`http://localhost:8080/api/analyses/${id}`, {
+    method: 'DELETE'
+  });
 }
 ```
 
-### Python Examples
+### Python
 
 ```python
 import requests
 
-BASE_URL = "http://localhost:8080"
-
 # Analyze text
-def analyze_text(text):
+def analyze_text(text: str) -> dict:
     response = requests.post(
-        f"{BASE_URL}/api/analyze",
-        json={"text": text}
+        'http://localhost:8080/api/analyze',
+        json={'text': text},
+        timeout=420  # Extended timeout for AI processing
     )
     return response.json()
 
-# Get analysis
-def get_analysis(analysis_id):
-    response = requests.get(f"{BASE_URL}/api/analyses/{analysis_id}")
+# Get analysis by ID
+def get_analysis(id: str) -> dict:
+    response = requests.get(f'http://localhost:8080/api/analyses/{id}')
     return response.json()
 
 # Search by tag
-def search_by_tag(tag):
+def search_by_tag(tag: str) -> list[dict]:
     response = requests.get(
-        f"{BASE_URL}/api/search",
-        params={"tag": tag}
+        'http://localhost:8080/api/search',
+        params={'tag': tag}
+    )
+    return response.json()
+
+# Search by reference
+def search_by_reference(reference: str) -> list[dict]:
+    response = requests.get(
+        'http://localhost:8080/api/search/reference',
+        params={'reference': reference}
     )
     return response.json()
 
 # List analyses
-def list_analyses(limit=10, offset=0):
+def list_analyses(limit: int = 10, offset: int = 0) -> list[dict]:
     response = requests.get(
-        f"{BASE_URL}/api/analyses",
-        params={"limit": limit, "offset": offset}
+        'http://localhost:8080/api/analyses',
+        params={'limit': limit, 'offset': offset}
     )
     return response.json()
 
 # Delete analysis
-def delete_analysis(analysis_id):
-    response = requests.delete(f"{BASE_URL}/api/analyses/{analysis_id}")
-    return response.status_code == 204
+def delete_analysis(id: str) -> None:
+    requests.delete(f'http://localhost:8080/api/analyses/{id}')
+```
+
+### cURL
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Analyze text
+curl -X POST http://localhost:8080/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your text here..."}'
+
+# Analyze from file (with extended timeout)
+curl -m 420 -X POST http://localhost:8080/api/analyze \
+  -H "Content-Type: application/json" \
+  -d @examples/climate_change.json
+
+# Get analysis
+curl http://localhost:8080/api/analyses/20250115103000-123456
+
+# Search by tag
+curl "http://localhost:8080/api/search?tag=positive"
+
+# Search by reference
+curl "http://localhost:8080/api/search/reference?reference=climate+change"
+
+# List analyses with pagination
+curl "http://localhost:8080/api/analyses?limit=5&offset=0"
+
+# Delete analysis
+curl -X DELETE http://localhost:8080/api/analyses/20250115103000-123456
 ```
 
 ---
 
-## Best Practices
+## Configuration
 
-1. **Batch Processing**: For multiple texts, send requests in parallel using goroutines or async functions
-2. **Error Handling**: Always check status codes and handle errors appropriately
-3. **Pagination**: Use reasonable limit values (10-50) to avoid large responses
-4. **Caching**: Consider caching analysis results on the client side for frequently accessed data
-5. **Text Length**: Very long texts (>100k words) may take longer to process
-6. **Tag Searches**: Tags are case-sensitive, so use exact matches
+### Command-Line Flags
+
+```bash
+./textanalyzer [flags]
+```
+
+- `-port` - Server port (default: 8080)
+- `-db` - Database file path (default: textanalyzer.db)
+- `-ollama-url` - Ollama API URL (default: http://localhost:11434)
+- `-ollama-model` - Ollama model (default: gpt-oss:20b)
+- `-use-ollama` - Enable/disable Ollama (default: true)
+
+### Environment Variables
+
+```bash
+export PORT=8080
+export DB_PATH=textanalyzer.db
+export OLLAMA_URL=http://localhost:11434
+export OLLAMA_MODEL=gpt-oss:20b
+export USE_OLLAMA=true
+```
+
+Command-line flags take precedence over environment variables.
 
 ---
 
-## Changelog
+## Performance
 
-### Version 1.0.0 (2025-01-15)
-- Initial release
-- Basic text analysis functionality
-- RESTful API with CRUD operations
-- Tag-based search
-- SQLite database support
+### Timeouts
+
+- Standard analysis: 30 seconds
+- AI analysis: up to 7 minutes
+- Query operations: 10 seconds
+
+### Database
+
+- Indexes on `created_at` and `tag` fields
+- Tag search uses indexed lookups
+- Reference search uses LIKE queries
+
+### CORS
+
+CORS is enabled for all origins by default. Modify `internal/api/handler.go` to restrict origins:
+
+```go
+c := cors.New(cors.Options{
+    AllowedOrigins: []string{"https://yourdomain.com"},
+    AllowedMethods: []string{"GET", "POST", "DELETE"},
+})
+```

@@ -1,59 +1,58 @@
-# Text Analyzer
+# TextAnalyzer Service
 
-A comprehensive web-based text analysis tool built in Go that extracts extensive JSON metadata from text, including sentiment analysis, word counts, key phrases, and references to verify. Now with **AI-powered analysis** using Ollama for enhanced insights.
+A comprehensive text analysis service built in Go that extracts extensive metadata from text, including sentiment analysis, readability scoring, named entity recognition, and AI-powered content analysis.
 
 ## Features
 
-- **Comprehensive Text Analysis**
-  - Word, sentence, and paragraph counts
-  - Sentiment analysis with scoring
-  - Top words and phrases extraction
-  - Named entity recognition
-  - Date, URL, and email extraction
-  - Readability scoring (Flesch Reading Ease)
-  - Reference extraction for fact-checking
+### Core Analysis
 
-- **AI-Powered Features** (with Ollama)
-  - 3-4 sentence synopsis generation
-  - Text cleaning (removes artifacts and non-relevant content)
-  - Editorial bias and motivation analysis
-  - AI-generated tags (up to 5 high-quality tags)
-  - Enhanced reference extraction with better accuracy
-  - **AI content detection** (determines if text was AI-written)
+- Word, sentence, and paragraph statistics
+- Sentiment analysis with scoring
+- Top words and phrases extraction
+- Named entity recognition
+- Date, URL, and email extraction
+- Flesch Reading Ease readability scoring
+- Reference extraction for fact-checking
 
-- **RESTful API**
-  - Upload text for analysis
-  - Retrieve analysis results
-  - Search by tags
-  - Search by reference text
-  - List all analyses with pagination
-  - Delete analyses
+### AI-Powered Features (Ollama)
 
-- **Performance**
-  - Goroutine-based parallel processing
-  - Efficient SQLite storage with searchable references
-  - CORS-enabled for web frontend integration
-  - Extended timeouts for AI processing (up to 7 minutes)
+- Text synopsis generation (3-4 sentences)
+- Text cleaning (removes artifacts)
+- Editorial bias and motivation analysis
+- AI-generated tags (up to 5 high-quality tags)
+- Enhanced reference extraction
+- AI content detection with confidence scoring
 
-- **Database**
-  - SQLite with migration system
-  - Designed for easy PostgreSQL migration
-  - No ORM dependencies
-  - Searchable references table
+### API Features
 
-## Installation
+- RESTful API with CORS support
+- SQLite storage with migrations
+- Tag-based search
+- Reference text search
+- Pagination support
+- Designed for PostgreSQL migration
 
-### Prerequisites
+## Requirements
 
 - Go 1.24 or higher
 - GCC (for SQLite CGO compilation)
-- **(Optional)** Ollama for AI-powered features
+- [Ollama](https://ollama.ai) (optional, for AI features)
 
-### Setup
+### Ollama Setup
+
+For AI-powered analysis (optional but recommended):
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# Install Ollama from https://ollama.ai
+
+# Pull the default model
+ollama pull gpt-oss:20b
+```
+
+## Installation
+
+```bash
+# Clone and navigate to directory
 cd textanalyzer
 
 # Install dependencies
@@ -62,40 +61,8 @@ go mod download
 # Build the server
 go build -o textanalyzer ./cmd/server
 
-# Run the server (with Ollama enabled by default)
+# Run the server
 ./textanalyzer
-
-# Run without Ollama (rule-based analysis only)
-./textanalyzer -use-ollama=false
-```
-
-### Ollama Setup (Optional but Recommended)
-
-For AI-powered features:
-
-```bash
-# Install Ollama from https://ollama.ai
-
-# Pull the default model
-ollama pull gpt-oss:20b
-
-# Start Ollama server (if not running)
-ollama serve
-
-# Run text analyzer with custom Ollama configuration
-./textanalyzer -ollama-url=http://localhost:11434 -ollama-model=gpt-oss:20b
-```
-
-See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed Ollama configuration.
-
-### Build Options
-
-```bash
-# Build with custom flags
-go build -o textanalyzer -ldflags="-s -w" ./cmd/server
-
-# Run with custom configuration
-./textanalyzer -port 3000 -db /path/to/database.db -ollama-url=http://custom:11434
 ```
 
 ## Usage
@@ -103,150 +70,46 @@ go build -o textanalyzer -ldflags="-s -w" ./cmd/server
 ### Starting the Server
 
 ```bash
-# Default (port 8080, textanalyzer.db)
+# Default configuration (port 8080, textanalyzer.db, Ollama enabled)
 ./textanalyzer
 
-# Custom configuration
+# Custom port and database
 ./textanalyzer -port 3000 -db mydata.db
+
+# Disable Ollama (rule-based analysis only)
+./textanalyzer -use-ollama=false
+
+# Custom Ollama configuration
+./textanalyzer -ollama-url=http://localhost:11434 -ollama-model=gpt-oss:20b
 ```
 
-### API Endpoints
+### Configuration Options
 
-#### Health Check
+**Command-Line Flags:**
+- `-port` - Server port (default: 8080)
+- `-db` - Database file path (default: textanalyzer.db)
+- `-ollama-url` - Ollama API URL (default: http://localhost:11434)
+- `-ollama-model` - Ollama model name (default: gpt-oss:20b)
+- `-use-ollama` - Enable/disable Ollama (default: true)
+
+**Environment Variables:**
+- `PORT` - Server port
+- `DB_PATH` - Database file path
+- `OLLAMA_URL` - Ollama API URL
+- `OLLAMA_MODEL` - Ollama model name
+- `USE_OLLAMA` - Enable/disable Ollama (true/false/1/0/yes/no)
+
+Command-line flags take precedence over environment variables.
+
+### Quick Examples
 
 ```bash
-GET /health
-```
-
-Response:
-```json
-{
-  "status": "ok",
-  "time": "2025-01-15T10:30:00Z"
-}
-```
-
-#### Analyze Text
-
-```bash
-POST /api/analyze
-Content-Type: application/json
-
-{
-  "text": "Your text to analyze here..."
-}
-```
-
-Response:
-```json
-{
-  "id": "20250115103000-123456",
-  "text": "Your text to analyze here...",
-  "metadata": {
-    "character_count": 150,
-    "word_count": 25,
-    "sentence_count": 3,
-    "paragraph_count": 1,
-    "average_word_length": 5.2,
-    "sentiment": "positive",
-    "sentiment_score": 0.35,
-    "top_words": [
-      {"word": "analyze", "count": 3},
-      {"word": "text", "count": 2}
-    ],
-    "top_phrases": [
-      {"phrase": "text analysis", "count": 2}
-    ],
-    "unique_words": 20,
-    "key_terms": ["analysis", "metadata", "extraction"],
-    "named_entities": ["Python", "JavaScript"],
-    "potential_dates": ["2024-01-15"],
-    "potential_urls": ["https://example.com"],
-    "email_addresses": ["info@example.com"],
-    "readability_score": 65.5,
-    "readability_level": "standard",
-    "complex_word_count": 5,
-    "avg_sentence_length": 8.33,
-    "references": [
-      {
-        "text": "45% increase",
-        "type": "statistic",
-        "context": "...surrounding text...",
-        "confidence": "medium"
-      }
-    ],
-    "tags": ["positive", "medium", "standard", "analysis"],
-    "language": "english",
-    "question_count": 1,
-    "exclamation_count": 0,
-    "capitalized_percent": 8.5,
-    "synopsis": "A concise 3-4 sentence summary of the text...",
-    "cleaned_text": "Text with artifacts removed...",
-    "editorial_analysis": "Assessment of bias and motivation...",
-    "ai_detection": {
-      "likelihood": "unlikely",
-      "confidence": "medium",
-      "reasoning": "The text shows natural variations...",
-      "indicators": ["varied sentence structure", "personal voice"],
-      "human_score": 75.5
-    }
-  },
-  "created_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T10:30:00Z"
-}
-```
-
-**Note:** The `synopsis`, `cleaned_text`, `editorial_analysis`, and `ai_detection` fields are only populated when Ollama is enabled.
-
-#### Get Analysis by ID
-
-```bash
-GET /api/analyses/{id}
-```
-
-#### List All Analyses
-
-```bash
-GET /api/analyses?limit=10&offset=0
-```
-
-Query Parameters:
-- `limit`: Number of results (default: 10)
-- `offset`: Offset for pagination (default: 0)
-
-#### Search by Tag
-
-```bash
-GET /api/search?tag=positive
-```
-
-#### Search by Reference
-
-```bash
-GET /api/search/reference?reference=climate+change
-```
-
-Search for analyses containing specific reference text.
-
-#### Delete Analysis
-
-```bash
-DELETE /api/analyses/{id}
-```
-
-Returns: `204 No Content`
-
-## API Examples
-
-### Using cURL
-
-```bash
-# Analyze text from file (with extended timeout for AI processing)
-curl -m 420 -X POST http://localhost:8080/api/analyze \
+# Analyze text
+curl -X POST http://localhost:8080/api/analyze \
   -H "Content-Type: application/json" \
-  -d @examples/climate_change.json
+  -d '{"text": "Your text to analyze here..."}'
 
-# Get specific analysis
+# Get analysis by ID
 curl http://localhost:8080/api/analyses/20250115103000-123456
 
 # Search by tag
@@ -255,76 +118,125 @@ curl "http://localhost:8080/api/search?tag=positive"
 # Search by reference text
 curl "http://localhost:8080/api/search/reference?reference=climate"
 
-# List analyses with pagination
-curl "http://localhost:8080/api/analyses?limit=5&offset=0"
-
-# Delete analysis
-curl -X DELETE http://localhost:8080/api/analyses/20250115103000-123456
+# List all analyses
+curl "http://localhost:8080/api/analyses?limit=10&offset=0"
 ```
 
-### Using JavaScript (Fetch API)
+## Output Format
 
-```javascript
-// Analyze text
-const response = await fetch('http://localhost:8080/api/analyze', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
+The analyzer returns comprehensive metadata:
+
+```json
+{
+  "id": "20250115103000-123456",
+  "text": "Original text...",
+  "metadata": {
+    "character_count": 150,
+    "word_count": 25,
+    "sentence_count": 3,
+    "sentiment": "positive",
+    "sentiment_score": 0.35,
+    "top_words": [{"word": "analyze", "count": 3}],
+    "readability_score": 65.5,
+    "readability_level": "standard",
+    "references": [
+      {
+        "text": "45% increase",
+        "type": "statistic",
+        "context": "...surrounding text...",
+        "confidence": "medium"
+      }
+    ],
+    "tags": ["positive", "standard", "analysis"],
+    "synopsis": "AI-generated summary...",
+    "cleaned_text": "Text with artifacts removed...",
+    "editorial_analysis": "Assessment of bias...",
+    "ai_detection": {
+      "likelihood": "unlikely",
+      "confidence": "medium",
+      "reasoning": "Analysis explanation...",
+      "indicators": ["varied sentence structure"],
+      "human_score": 75.5
+    }
   },
-  body: JSON.stringify({
-    text: 'Your text here...'
-  })
-});
-const analysis = await response.json();
-console.log(analysis);
-
-// Search by tag
-const searchResponse = await fetch('http://localhost:8080/api/search?tag=positive');
-const results = await searchResponse.json();
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T10:30:00Z"
+}
 ```
 
-## Testing
+**Note:** AI-specific fields (`synopsis`, `cleaned_text`, `editorial_analysis`, `ai_detection`) are only populated when Ollama is enabled.
 
-### Run All Tests
+## Architecture
+
+### Package Structure
+
+- **cmd/server** - Application entry point
+- **internal/analyzer** - Text analysis logic and algorithms
+- **internal/api** - HTTP handlers with goroutine-based parallel processing
+- **internal/database** - Data persistence layer with migrations
+- **internal/models** - Shared data structures
+
+### Analysis Pipeline
+
+The analyzer performs parallel analysis operations:
+
+1. Basic statistics (word/sentence/paragraph counts)
+2. Sentiment analysis (lexicon-based)
+3. Frequency analysis (top words and phrases)
+4. Content extraction (entities, dates, URLs, emails)
+5. Readability scoring (Flesch Reading Ease)
+6. Reference extraction (statistics, quotes, claims)
+7. Auto-tagging (sentiment, length, readability, topics)
+8. AI analysis (if Ollama enabled)
+
+### Database
+
+SQLite database with two tables:
+
+- **analyses** - Stores text, JSON metadata, timestamps
+- **tags** - Many-to-many relationship for tag search
+
+Indexes on `created_at` and `tag` fields for performance.
+
+## Development
+
+### Make Commands
 
 ```bash
+make build          # Build binary
+make test           # Run all tests
+make test-coverage  # Generate coverage report
+make run            # Start server
+make clean          # Clean artifacts
+make fmt            # Format code
+make lint           # Run linter
+make check          # Run fmt, lint, and test
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Generate coverage report
+make test-coverage
+
+# Using Go directly
 go test ./...
-```
-
-### Run Tests with Coverage
-
-```bash
-go test -cover ./...
-```
-
-### Run Tests with Verbose Output
-
-```bash
 go test -v ./...
-```
+go test -cover ./...
 
-### Generate Coverage Report
-
-```bash
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-```
-
-### Run Specific Package Tests
-
-```bash
+# Test specific packages
 go test ./internal/analyzer
 go test ./internal/database
 go test ./internal/api
-```
 
-### Run Benchmarks
-
-```bash
+# Run benchmarks
 go test -bench=. ./internal/analyzer
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 textanalyzer/
@@ -346,99 +258,64 @@ textanalyzer/
 │   │   └── queries_test.go   # Database tests
 │   └── models/
 │       └── models.go         # Data structures
-├── examples/                 # Example text files
-│   ├── climate_change.json
-│   ├── product_review.json
-│   └── technical_article.json
-├── go.mod
-├── go.sum
-└── README.md
+├── examples/                 # Example JSON files
+├── README.md                 # This file
+└── API.md                    # API reference
 ```
 
-## Database Schema
+## Switching to PostgreSQL
 
-### Analyses Table
+The codebase is designed for easy PostgreSQL migration:
 
-```sql
-CREATE TABLE analyses (
-    id TEXT PRIMARY KEY,
-    text TEXT NOT NULL,
-    metadata TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
+1. Add PostgreSQL driver:
+   ```bash
+   go get github.com/lib/pq
+   ```
 
-### Tags Table
+2. Update `internal/database/db.go`:
+   ```go
+   import _ "github.com/lib/pq"
 
-```sql
-CREATE TABLE tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    analysis_id TEXT NOT NULL,
-    tag TEXT NOT NULL,
-    FOREIGN KEY (analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
-);
-```
+   func New(connectionString string) (*DB, error) {
+       conn, err := sql.Open("postgres", connectionString)
+       // ... rest remains the same
+   }
+   ```
 
-## Migrating to PostgreSQL
+3. Update SQL syntax in `migrations.go`:
+   - `AUTOINCREMENT` → `SERIAL`
+   - `DATETIME` → `TIMESTAMP`
 
-The codebase is designed for easy PostgreSQL migration. Here's how:
-
-1. **Update Dependencies**
-
-```bash
-go get github.com/lib/pq
-```
-
-2. **Update `database/db.go`**
-
-```go
-import _ "github.com/lib/pq"
-
-func New(connectionString string) (*DB, error) {
-    conn, err := sql.Open("postgres", connectionString)
-    // ... rest of the code
-}
-```
-
-3. **Update Migration SQL**
-
-PostgreSQL uses slightly different syntax:
-- Change `AUTOINCREMENT` to `SERIAL`
-- Change `DATETIME` to `TIMESTAMP`
-- Update any SQLite-specific functions
-
-4. **Connection String**
-
-```bash
-./textanalyzer -db "postgres://user:password@localhost/textanalyzer?sslmode=disable"
-```
+4. Use PostgreSQL connection string:
+   ```bash
+   ./textanalyzer -db "postgres://user:password@localhost/textanalyzer?sslmode=disable"
+   ```
 
 ## Metadata Fields Reference
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `character_count` | int | Total characters including spaces |
-| `word_count` | int | Total number of words |
+| `word_count` | int | Total words |
 | `sentence_count` | int | Number of sentences |
 | `paragraph_count` | int | Number of paragraphs |
-| `average_word_length` | float64 | Average word length in characters |
-| `sentiment` | string | Overall sentiment: positive, negative, neutral |
-| `sentiment_score` | float64 | Sentiment score from -1.0 to 1.0 |
+| `average_word_length` | float64 | Average word length |
+| `sentiment` | string | positive, negative, or neutral |
+| `sentiment_score` | float64 | Score from -1.0 to 1.0 |
 | `top_words` | array | Most frequent words with counts |
-| `top_phrases` | array | Most frequent phrases (2-3 words) |
+| `top_phrases` | array | Most frequent 2-3 word phrases |
 | `unique_words` | int | Number of unique words |
-| `key_terms` | array | Important terms based on frequency and length |
-| `named_entities` | array | Capitalized words/phrases (potential names) |
-| `potential_dates` | array | Extracted dates in various formats |
+| `key_terms` | array | Important terms by frequency |
+| `named_entities` | array | Capitalized words/phrases |
+| `potential_dates` | array | Extracted dates |
 | `potential_urls` | array | Extracted URLs |
 | `email_addresses` | array | Extracted email addresses |
-| `readability_score` | float64 | Flesch Reading Ease score (0-100) |
+| `readability_score` | float64 | Flesch Reading Ease (0-100) |
 | `readability_level` | string | Reading difficulty level |
 | `complex_word_count` | int | Words with 3+ syllables |
 | `avg_sentence_length` | float64 | Average words per sentence |
-| `references` | array | Potential claims/facts to verify |
-| `tags` | array | Auto-generated categorization tags |
+| `references` | array | Claims/facts to verify |
+| `tags` | array | Auto-generated tags |
 | `language` | string | Detected language |
 | `question_count` | int | Number of questions |
 | `exclamation_count` | int | Number of exclamations |
@@ -458,51 +335,21 @@ PostgreSQL uses slightly different syntax:
 
 ## Performance Considerations
 
-- All API operations use goroutines for parallel processing
-- Default timeout is 30 seconds for analysis, 10 seconds for queries
-- Database uses indexes on `created_at` and `tag` fields
-- Consider connection pooling for high-traffic scenarios
-- For large-scale deployments, migrate to PostgreSQL
+- API operations use goroutines for parallel processing
+- Default timeout: 30 seconds for analysis, 10 seconds for queries
+- AI analysis has extended timeout (up to 7 minutes)
+- Database indexes on `created_at` and `tag` fields
+- Connection pooling recommended for high-traffic scenarios
 
-## CORS Configuration
+## API Documentation
 
-The API is CORS-enabled with the following defaults:
-- **Allowed Origins**: `*` (all origins)
-- **Allowed Methods**: GET, POST, PUT, DELETE, OPTIONS
-- **Allowed Headers**: All headers
-- **Credentials**: Enabled
-
-To restrict CORS, modify `internal/api/handler.go`:
-
-```go
-c := cors.New(cors.Options{
-    AllowedOrigins: []string{"https://yourdomain.com"},
-    AllowedMethods: []string{"GET", "POST", "DELETE"},
-    // ... other options
-})
-```
-
-## Example Use Cases
-
-1. **Content Analysis**: Analyze blog posts, articles, or documents for readability and sentiment
-2. **Fact-Checking**: Extract claims and statistics that need verification
-3. **SEO Optimization**: Analyze content for key terms and readability
-4. **Social Media Monitoring**: Track sentiment across posts
-5. **Academic Research**: Extract metadata from research papers
-6. **Quality Control**: Ensure content meets readability standards
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Write tests for new functionality
-4. Ensure all tests pass: `go test ./...`
-5. Submit a pull request
+See [API.md](API.md) for complete API reference including:
+- Endpoint specifications
+- Request/response formats
+- Error handling
+- Code examples
+- Data type definitions
 
 ## License
 
-[Your chosen license]
-
-## Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
+This project is licensed under the MIT License - see the [LICENSE](../../LICENSE) file for details.
