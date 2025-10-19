@@ -81,7 +81,16 @@ func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, e
 
 // GenerateSynopsis creates a 3-4 sentence synopsis of the text
 func (c *Client) GenerateSynopsis(ctx context.Context, text string) (string, error) {
-	prompt := fmt.Sprintf(`Analyze the following text and provide a concise synopsis that captures the main points and key ideas. Write EXACTLY 3 or 4 sentences, no more. Do NOT use numbering or bullet points.
+	prompt := fmt.Sprintf(`Analyze the following text and provide a concise synopsis that captures the main points and key ideas.
+
+Requirements:
+- Write EXACTLY 2 or 3 short sentences summarizing the content
+- Keep each sentence under 15 words
+- Use simple, clear language
+- Avoid complex or compound sentences
+- Do NOT use numbering or bullet points
+- Do NOT provide meta-commentary (e.g., "the text has...", "this article discusses...")
+- Write the synopsis as if describing the content to someone
 
 Text:
 %s
@@ -93,12 +102,19 @@ Synopsis:`, text)
 
 // CleanText removes artifacts and non-relevant content from the text
 func (c *Client) CleanText(ctx context.Context, text string) (string, error) {
-	prompt := fmt.Sprintf(`Clean the following text by removing artifacts, formatting issues, advertisements, navigation elements, and other non-relevant content. Return only the clean article content without any explanations.
+	prompt := fmt.Sprintf(`Your task is to clean the following text by removing artifacts, formatting issues, advertisements, navigation elements, and other non-relevant content.
 
-Text:
+IMPORTANT INSTRUCTIONS:
+- If the text is already clean and well-formatted, return it EXACTLY as provided
+- If there are issues to clean, return ONLY the cleaned article content
+- Do NOT add any commentary, explanations, or meta-analysis
+- Do NOT say things like "the text is clean" or "no changes needed"
+- Simply return the text (cleaned or as-is)
+
+Text to process:
 %s
 
-Cleaned text:`, text)
+Output the text:`, text)
 
 	return c.GenerateResponse(ctx, prompt)
 }
@@ -107,7 +123,13 @@ Cleaned text:`, text)
 func (c *Client) EditorialAnalysis(ctx context.Context, text string) (string, error) {
 	prompt := fmt.Sprintf(`Analyze the following text and provide an unbiased assessment of the nature and purpose of this text (informational, persuasive, entertainment, etc.), possible motivations behind the writing, any editorial slant or bias (left/right, commercial, academic, etc.), and the overall tone and approach.
 
-Be objective and analytical in your assessment. Provide EXACTLY 3 sentences in paragraph form. Do NOT use numbering or bullet points.
+Requirements:
+- Write EXACTLY 2 short sentences
+- Keep each sentence under 15 words
+- Use simple, clear language
+- Avoid complex or compound sentences
+- Be objective and analytical
+- Do NOT use numbering or bullet points
 
 Text:
 %s
