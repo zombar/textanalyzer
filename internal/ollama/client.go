@@ -81,7 +81,7 @@ func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, e
 
 // GenerateSynopsis creates a 3-4 sentence synopsis of the text
 func (c *Client) GenerateSynopsis(ctx context.Context, text string) (string, error) {
-	prompt := fmt.Sprintf(`Analyze the following text and provide a concise 3-4 sentence synopsis that captures the main points and key ideas.
+	prompt := fmt.Sprintf(`Analyze the following text and provide a concise synopsis that captures the main points and key ideas. Write EXACTLY 3 or 4 sentences, no more. Do NOT use numbering or bullet points.
 
 Text:
 %s
@@ -105,13 +105,9 @@ Cleaned text:`, text)
 
 // EditorialAnalysis provides analysis of bias, motivation, and editorial slant
 func (c *Client) EditorialAnalysis(ctx context.Context, text string) (string, error) {
-	prompt := fmt.Sprintf(`Analyze the following text and provide an unbiased assessment of:
-1. The nature and purpose of this text (informational, persuasive, entertainment, etc.)
-2. Possible motivations behind the writing
-3. Any editorial slant or bias (left/right, commercial, academic, etc.)
-4. Overall tone and approach
+	prompt := fmt.Sprintf(`Analyze the following text and provide an unbiased assessment of the nature and purpose of this text (informational, persuasive, entertainment, etc.), possible motivations behind the writing, any editorial slant or bias (left/right, commercial, academic, etc.), and the overall tone and approach.
 
-Be objective and analytical in your assessment. Provide 2-3 sentences.
+Be objective and analytical in your assessment. Provide EXACTLY 3 sentences in paragraph form. Do NOT use numbering or bullet points.
 
 Text:
 %s
@@ -129,9 +125,16 @@ func (c *Client) GenerateTags(ctx context.Context, text string, metadata map[str
 		sentiment = s
 	}
 
-	prompt := fmt.Sprintf(`Analyze the following text and generate up to 5 relevant tags that categorize and describe the content. Tags should be single words or short phrases (2-3 words max), lowercase, and hyphenated if multi-word.
+	prompt := fmt.Sprintf(`Analyze the following text and generate up to 10 relevant tags that categorize and describe the content.
 
-Consider: topic, domain, sentiment (%s), content type, and key themes.
+Tag formatting rules:
+- Prefer single-word tags whenever possible
+- Multi-word tags should use hyphens only (no spaces or underscores)
+- Names of people, places, and things make excellent tags
+- All tags should be lowercase
+- Examples: "technology", "climate-change", "new-york", "machine-learning", "einstein"
+
+Consider: topic, domain, sentiment (%s), content type, key themes, named entities (people, places, organizations).
 
 Return ONLY a JSON array of strings, nothing else.
 
@@ -160,12 +163,41 @@ Tags (JSON array):`, sentiment, text)
 		return nil, fmt.Errorf("no JSON array found in response")
 	}
 
-	// Limit to 5 tags
-	if len(tags) > 5 {
-		tags = tags[:5]
+	// Normalize tags
+	for i, tag := range tags {
+		tags[i] = normalizeTag(tag)
+	}
+
+	// Limit to 10 tags
+	if len(tags) > 10 {
+		tags = tags[:10]
 	}
 
 	return tags, nil
+}
+
+// normalizeTag normalizes a tag according to the tagging rules:
+// - Converts to lowercase
+// - Replaces spaces and underscores with hyphens
+// - Removes multiple consecutive hyphens
+// - Trims leading/trailing hyphens and whitespace
+func normalizeTag(tag string) string {
+	// Convert to lowercase
+	tag = strings.ToLower(tag)
+
+	// Replace spaces and underscores with hyphens
+	tag = strings.ReplaceAll(tag, " ", "-")
+	tag = strings.ReplaceAll(tag, "_", "-")
+
+	// Remove multiple consecutive hyphens
+	for strings.Contains(tag, "--") {
+		tag = strings.ReplaceAll(tag, "--", "-")
+	}
+
+	// Trim leading/trailing hyphens and whitespace
+	tag = strings.Trim(tag, "- \t\n\r")
+
+	return tag
 }
 
 // ExtractReferences extracts and validates references from text

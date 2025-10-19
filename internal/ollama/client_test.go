@@ -96,9 +96,9 @@ func TestParseTagsFromJSON(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "more than 5 tags (should limit)",
-			response:    `["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7"]`,
-			expected:    []string{"tag1", "tag2", "tag3", "tag4", "tag5"},
+			name:        "more than 10 tags (should limit)",
+			response:    `["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12"]`,
+			expected:    []string{"tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"},
 			expectError: false,
 		},
 		{
@@ -134,9 +134,9 @@ func TestParseTagsFromJSON(t *testing.T) {
 				err = &jsonParseError{}
 			}
 
-			// Limit to 5 tags
-			if err == nil && len(tags) > 5 {
-				tags = tags[:5]
+			// Limit to 10 tags
+			if err == nil && len(tags) > 10 {
+				tags = tags[:10]
 			}
 
 			if tt.expectError {
@@ -391,5 +391,63 @@ func TestContextHandling(t *testing.T) {
 	_, err = client.GenerateSynopsis(ctx, "test")
 	if err == nil {
 		t.Log("Note: GenerateSynopsis didn't fail with canceled context (likely no Ollama server)")
+	}
+}
+
+func TestNormalizeTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "lowercase conversion",
+			input:    "Machine Learning",
+			expected: "machine-learning",
+		},
+		{
+			name:     "underscore to hyphen",
+			input:    "climate_change",
+			expected: "climate-change",
+		},
+		{
+			name:     "multiple spaces",
+			input:    "New  York  City",
+			expected: "new-york-city",
+		},
+		{
+			name:     "mixed spaces and underscores",
+			input:    "Social_Media Platform",
+			expected: "social-media-platform",
+		},
+		{
+			name:     "leading and trailing spaces",
+			input:    "  einstein  ",
+			expected: "einstein",
+		},
+		{
+			name:     "multiple consecutive hyphens",
+			input:    "foo--bar---baz",
+			expected: "foo-bar-baz",
+		},
+		{
+			name:     "already normalized",
+			input:    "machine-learning",
+			expected: "machine-learning",
+		},
+		{
+			name:     "single word uppercase",
+			input:    "TECHNOLOGY",
+			expected: "technology",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeTag(tt.input)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
 	}
 }
