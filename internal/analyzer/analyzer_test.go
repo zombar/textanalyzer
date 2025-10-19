@@ -488,6 +488,69 @@ func containsStringSlice(slice []string, item string) bool {
 	return false
 }
 
+func TestNormalizeTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "lowercase conversion",
+			input:    "Machine Learning",
+			expected: "machine-learning",
+		},
+		{
+			name:     "underscore to hyphen",
+			input:    "climate_change",
+			expected: "climate-change",
+		},
+		{
+			name:     "multiple spaces",
+			input:    "New  York  City",
+			expected: "new-york-city",
+		},
+		{
+			name:     "mixed spaces and underscores",
+			input:    "Social_Media Platform",
+			expected: "social-media-platform",
+		},
+		{
+			name:     "leading and trailing spaces",
+			input:    "  einstein  ",
+			expected: "einstein",
+		},
+		{
+			name:     "multiple consecutive hyphens",
+			input:    "foo--bar---baz",
+			expected: "foo-bar-baz",
+		},
+		{
+			name:     "already normalized",
+			input:    "machine-learning",
+			expected: "machine-learning",
+		},
+		{
+			name:     "single word uppercase",
+			input:    "TECHNOLOGY",
+			expected: "technology",
+		},
+		{
+			name:     "readability level",
+			input:    "very_easy",
+			expected: "very-easy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeTag(tt.input)
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
 func BenchmarkAnalyze(b *testing.B) {
 	a := New()
 	text := `Climate change is a pressing global issue. Scientists have documented a 1.1°C increase in global temperatures since 1880.

@@ -665,7 +665,7 @@ func generateTags(text string, metadata models.Metadata) []string {
 	tags := []string{}
 
 	// Sentiment tag
-	tags = append(tags, metadata.Sentiment)
+	tags = append(tags, normalizeTag(metadata.Sentiment))
 
 	// Length tags
 	if metadata.WordCount < 100 {
@@ -676,8 +676,8 @@ func generateTags(text string, metadata models.Metadata) []string {
 		tags = append(tags, "long")
 	}
 
-	// Readability tags
-	tags = append(tags, metadata.ReadabilityLevel)
+	// Readability tags (normalize in case they have underscores)
+	tags = append(tags, normalizeTag(metadata.ReadabilityLevel))
 
 	// Content type tags
 	if metadata.QuestionCount > 3 {
@@ -690,12 +690,42 @@ func generateTags(text string, metadata models.Metadata) []string {
 		tags = append(tags, "research")
 	}
 
-	// Topic tags from key terms (top 3)
+	// Topic tags from key terms (top 3) - normalize them
 	for i := 0; i < len(metadata.KeyTerms) && i < 3; i++ {
-		tags = append(tags, metadata.KeyTerms[i])
+		tags = append(tags, normalizeTag(metadata.KeyTerms[i]))
+	}
+
+	// Named entities make good tags (people, places, things)
+	// Add up to 5 named entities as tags
+	for i := 0; i < len(metadata.NamedEntities) && i < 5; i++ {
+		tags = append(tags, normalizeTag(metadata.NamedEntities[i]))
 	}
 
 	return tags
+}
+
+// normalizeTag normalizes a tag according to the tagging rules:
+// - Converts to lowercase
+// - Replaces spaces and underscores with hyphens
+// - Removes multiple consecutive hyphens
+// - Trims leading/trailing hyphens and whitespace
+func normalizeTag(tag string) string {
+	// Convert to lowercase
+	tag = strings.ToLower(tag)
+
+	// Replace spaces and underscores with hyphens
+	tag = strings.ReplaceAll(tag, " ", "-")
+	tag = strings.ReplaceAll(tag, "_", "-")
+
+	// Remove multiple consecutive hyphens
+	for strings.Contains(tag, "--") {
+		tag = strings.ReplaceAll(tag, "--", "-")
+	}
+
+	// Trim leading/trailing hyphens and whitespace
+	tag = strings.Trim(tag, "- \t\n\r")
+
+	return tag
 }
 
 // detectLanguage provides basic language detection
