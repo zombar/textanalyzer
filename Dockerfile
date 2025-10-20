@@ -1,8 +1,8 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+# Install minimal build dependencies
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
@@ -13,14 +13,14 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags="-s -w" -o textanalyzer ./cmd/server
+# Build the application (pure Go)
+RUN GOOS=linux go build -a -ldflags="-s -w" -o textanalyzer ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.20
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates sqlite-libs
+# Install minimal runtime dependencies
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
