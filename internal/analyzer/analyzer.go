@@ -76,6 +76,34 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		metadata.AvgSentenceLength = float64(metadata.WordCount) / float64(metadata.SentenceCount)
 	}
 
+	// EARLY QUALITY CHECK: Run quality scoring BEFORE expensive AI analysis
+	// This filters out garbage content before sending to Ollama
+	log.Println("Running early quality assessment...")
+	earlyQualityScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+
+	const QUALITY_THRESHOLD = 0.35 // Skip AI processing for content below this threshold
+
+	if earlyQualityScore.Score < QUALITY_THRESHOLD {
+		log.Printf("Content quality too low (%.2f < %.2f), skipping AI analysis. Reason: %s",
+			earlyQualityScore.Score, QUALITY_THRESHOLD, earlyQualityScore.Reason)
+
+		// Return minimal metadata with quality score
+		metadata.QualityScore = &earlyQualityScore
+		metadata.References = extractReferences(text)
+		metadata.Tags = generateTags(text, metadata)
+
+		// Language indicators
+		metadata.Language = detectLanguage(text)
+		metadata.QuestionCount = strings.Count(text, "?")
+		metadata.ExclamationCount = strings.Count(text, "!")
+		metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
+
+		return metadata
+	}
+
+	log.Printf("Content quality sufficient (%.2f >= %.2f), proceeding with AI analysis",
+		earlyQualityScore.Score, QUALITY_THRESHOLD)
+
 	// AI-powered analysis (if Ollama client is available)
 	if a.ollamaClient != nil {
 		log.Println("Ollama client available, starting AI-powered analysis")
@@ -754,6 +782,131 @@ func calculateCapitalizedPercent(text string) float64 {
 	return math.Round((float64(capitalizedCount)/float64(len(words)))*10000) / 100
 }
 
+// detectListLikeStructure checks if text is just a disconnected list of items
+func detectListLikeStructure(text string) (bool, float64) {
+	sentences := regexp.MustCompile(`[^.!?]+[.!?]`).FindAllString(text, -1)
+	if len(sentences) < 3 {
+		return false, 0.0
+	}
+
+	// Check for patterns that suggest list-like structure:
+	// 1. Many short, disconnected sentences
+	// 2. Little vocabulary overlap between consecutive sentences
+	// 3. Abrupt topic changes
+
+	shortSentenceCount := 0
+	for _, sentence := range sentences {
+		words := strings.Fields(sentence)
+		if len(words) < 15 {
+			shortSentenceCount++
+		}
+	}
+
+	shortSentenceRatio := float64(shortSentenceCount) / float64(len(sentences))
+
+	// Check vocabulary overlap between consecutive sentences
+	lowOverlapCount := 0
+	for i := 0; i < len(sentences)-1; i++ {
+		words1 := extractWords(sentences[i])
+		words2 := extractWords(sentences[i+1])
+
+		// Calculate Jaccard similarity
+		set1 := make(map[string]bool)
+		for _, w := range words1 {
+			if len(w) > 3 { // Only meaningful words
+				set1[w] = true
+			}
+		}
+
+		set2 := make(map[string]bool)
+		for _, w := range words2 {
+			if len(w) > 3 {
+				set2[w] = true
+			}
+		}
+
+		// Count intersection
+		intersection := 0
+		for w := range set1 {
+			if set2[w] {
+				intersection++
+			}
+		}
+
+		// If very little overlap, it's likely disconnected
+		union := len(set1) + len(set2) - intersection
+		if union > 0 {
+			similarity := float64(intersection) / float64(union)
+			if similarity < 0.15 { // Very low overlap threshold
+				lowOverlapCount++
+			}
+		}
+	}
+
+	lowOverlapRatio := float64(lowOverlapCount) / float64(len(sentences)-1)
+
+	// If most sentences are short AND have low overlap, it's list-like
+	isListLike := shortSentenceRatio > 0.6 && lowOverlapRatio > 0.5
+
+	return isListLike, lowOverlapRatio
+}
+
+// calculateTransitionWordScore checks for connective language
+func calculateTransitionWordScore(text string) float64 {
+	textLower := strings.ToLower(text)
+
+	transitionWords := []string{
+		// Addition
+		"additionally", "furthermore", "moreover", "also", "besides",
+		// Contrast
+		"however", "nevertheless", "nonetheless", "although", "despite", "yet", "but",
+		// Cause/Effect
+		"therefore", "thus", "consequently", "hence", "accordingly", "as a result",
+		// Sequence
+		"first", "second", "third", "next", "then", "finally", "subsequently",
+		// Example
+		"for example", "for instance", "specifically", "namely",
+		// Emphasis
+		"indeed", "in fact", "certainly", "clearly",
+	}
+
+	transitionCount := 0
+	for _, word := range transitionWords {
+		transitionCount += strings.Count(textLower, word)
+	}
+
+	// Normalize by sentence count
+	sentenceCount := strings.Count(text, ".") + strings.Count(text, "!") + strings.Count(text, "?")
+	if sentenceCount == 0 {
+		sentenceCount = 1
+	}
+
+	// Good writing has ~0.3-0.5 transitions per sentence
+	score := float64(transitionCount) / float64(sentenceCount)
+	return score
+}
+
+// detectCoherenceMarkers looks for pronouns and references that connect content
+func detectCoherenceMarkers(text string) int {
+	textLower := strings.ToLower(text)
+
+	markers := []string{
+		// Pronouns that refer back to previous content
+		" it ", " this ", " that ", " these ", " those ", " they ", " them ",
+		// Demonstratives
+		" such ", " said ",
+		// Articles that suggest previous reference
+		" the ",
+	}
+
+	markerCount := 0
+	for _, marker := range markers {
+		markerCount += strings.Count(textLower, marker)
+	}
+
+	return markerCount
+}
+
 // scoreTextQualityFallback provides rule-based text quality scoring when Ollama is unavailable
 func scoreTextQualityFallback(text string, wordCount int, readabilityScore float64) models.TextQualityScore {
 	score := 0.5 // Start with neutral score
@@ -794,6 +947,44 @@ func scoreTextQualityFallback(text string, wordCount int, readabilityScore float
 		categories = append(categories, "informative")
 		qualityIndicators = append(qualityIndicators, "substantial_length")
 		reasons = append(reasons, "Substantial content")
+	}
+
+	// Check for list-like structure (disconnected sentences)
+	isListLike, overlapRatio := detectListLikeStructure(text)
+	if isListLike {
+		score -= 0.4
+		categories = append(categories, "incoherent", "list_like", "low_quality")
+		problemsDetected = append(problemsDetected, "disconnected_sentences", "no_flow")
+		reasons = append(reasons, "Text appears to be disconnected list items without flow")
+	} else if overlapRatio > 0.4 {
+		// Many disconnected sentences but not quite list-like
+		score -= 0.2
+		problemsDetected = append(problemsDetected, "poor_continuity")
+		reasons = append(reasons, "Weak continuity between sentences")
+	}
+
+	// Check for transition words (coherence indicators)
+	transitionScore := calculateTransitionWordScore(text)
+	if transitionScore >= 0.2 {
+		score += 0.1
+		qualityIndicators = append(qualityIndicators, "good_transitions")
+	} else if transitionScore < 0.05 && wordCount > 100 {
+		score -= 0.15
+		problemsDetected = append(problemsDetected, "lacks_transitions")
+		reasons = append(reasons, "Few transition words, may lack flow")
+	}
+
+	// Check for coherence markers (pronouns, references)
+	coherenceMarkers := detectCoherenceMarkers(text)
+	markerRatio := float64(coherenceMarkers) / float64(wordCount)
+	if markerRatio >= 0.05 && markerRatio <= 0.15 {
+		// Good use of references
+		score += 0.1
+		qualityIndicators = append(qualityIndicators, "good_reference_usage")
+	} else if markerRatio < 0.02 && wordCount > 100 {
+		// Very few references in longer text suggests disconnected content
+		score -= 0.1
+		problemsDetected = append(problemsDetected, "lacks_coherence_markers")
 	}
 
 	// Check for spam indicators
