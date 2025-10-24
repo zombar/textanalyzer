@@ -446,7 +446,10 @@ func TestAnalyzeWithFallbackScoring(t *testing.T) {
 	// Create analyzer WITHOUT Ollama client (will use fallback)
 	a := New()
 
-	text := strings.Repeat("This is a well-written article about important research findings. The study demonstrates clear evidence of significant results. ", 5)
+	text := `This is a well-written article about important research findings. The study demonstrates clear evidence of significant results.
+	Furthermore, the data shows consistent patterns across multiple trials. These findings suggest that the hypothesis is supported by empirical evidence.
+	However, additional research may be needed to confirm these results. The implications of this work are far-reaching and could impact future studies.
+	In conclusion, this research contributes valuable insights to the field. The methodology was rigorous and the analysis was thorough.`
 
 	metadata := a.Analyze(text)
 
@@ -477,6 +480,47 @@ func TestAnalyzeWithFallbackScoring(t *testing.T) {
 
 	t.Logf("✓ Fallback quality score: %.2f (recommended: %v, ai_used: %v)",
 		metadata.QualityScore.Score, metadata.QualityScore.IsRecommended, metadata.QualityScore.AIUsed)
+}
+
+// TestScoreTextQualityDisconnectedHeadlines tests that disconnected news headlines are detected
+func TestScoreTextQualityDisconnectedHeadlines(t *testing.T) {
+	text := `Gaza doctors struggle to investigate 'signs of torture' on unnamed dead returned by Israel.
+	Vance and Rubio criticise Israeli parliament's vote on West Bank annexation.
+	New images show Israeli control line deeper into Gaza than expected.
+	UN's top court says Israel obliged to allow UN aid into Gaza.
+	'Fatal combination' of disease, injuries and famine in Gaza is generational crisis, WHO tells BBC.
+	Israel identifies bodies of two hostages returned by Hamas.
+	Gaza ceasefire deal going better than expected, Vance says.
+	Israel's 'yellow line' in Gaza gives Netanyahu room for manoeuvre.
+	British officers sent to Israel to help monitor Gaza ceasefire.
+	Hamas ruled Gaza with an iron rod - will it really give up control?`
+
+	a := New()
+	metadata := a.Analyze(text)
+
+	if metadata.QualityScore == nil {
+		t.Fatal("Expected QualityScore to be present")
+	}
+
+	// Should score very poorly due to lack of flow
+	if metadata.QualityScore.Score >= 0.35 {
+		t.Errorf("Expected low score for disconnected headlines, got %.2f", metadata.QualityScore.Score)
+	}
+
+	// Should detect the issues
+	if !containsStringSlice(metadata.QualityScore.ProblemsDetected, "disconnected_sentences") &&
+		!containsStringSlice(metadata.QualityScore.ProblemsDetected, "no_flow") &&
+		!containsStringSlice(metadata.QualityScore.ProblemsDetected, "poor_continuity") {
+		t.Errorf("Expected disconnected/flow problems to be detected, got: %v", metadata.QualityScore.ProblemsDetected)
+	}
+
+	if !containsStringSlice(metadata.QualityScore.Categories, "incoherent") &&
+		!containsStringSlice(metadata.QualityScore.Categories, "list_like") {
+		t.Errorf("Expected 'incoherent' or 'list_like' category, got: %v", metadata.QualityScore.Categories)
+	}
+
+	t.Logf("✓ Disconnected headlines scored %.2f with problems: %v",
+		metadata.QualityScore.Score, metadata.QualityScore.ProblemsDetected)
 }
 
 func containsStringSlice(slice []string, item string) bool {
