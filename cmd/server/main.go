@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/zombar/purpletab/pkg/tracing"
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/api"
 	"github.com/zombar/textanalyzer/internal/database"
@@ -17,6 +18,27 @@ import (
 )
 
 func main() {
+	// Setup structured logging with JSON output
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	logger.Info("textanalyzer service initializing", "version", "1.0.0")
+
+	// Initialize tracing
+	tp, err := tracing.InitTracer("purpletab-textanalyzer")
+	if err != nil {
+		logger.Warn("failed to initialize tracer, continuing without tracing", "error", err)
+	} else {
+		defer func() {
+			if err := tp.Shutdown(context.Background()); err != nil {
+				logger.Error("error shutting down tracer", "error", err)
+			}
+		}()
+		logger.Info("tracing initialized successfully")
+	}
+
 	// Get default values from environment variables, with fallbacks
 	portDefault := getEnv("PORT", "8080")
 	dbPathDefault := getEnv("DB_PATH", "textanalyzer.db")
@@ -36,13 +58,15 @@ func main() {
 	// Initialize database
 	db, err := database.New(*dbPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.Error("failed to initialize database", "error", err, "database_path", *dbPath)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	// Run migrations
 	if err := db.Migrate(); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+		logger.Error("failed to run migrations", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize analyzer
@@ -50,19 +74,26 @@ func main() {
 	if *useOllama {
 		ollamaClient, err := ollama.New(*ollamaURL, *ollamaModel)
 		if err != nil {
-			log.Printf("Warning: Failed to initialize Ollama client: %v. Falling back to rule-based analysis.", err)
+			logger.Warn("failed to initialize Ollama client, falling back to rule-based analysis",
+				"error", err,
+				"ollama_url", *ollamaURL,
+				"ollama_model", *ollamaModel,
+			)
 			textAnalyzer = analyzer.New()
 		} else {
-			log.Printf("Ollama client initialized with model: %s", *ollamaModel)
+			logger.Info("Ollama client initialized", "model", *ollamaModel, "url", *ollamaURL)
 			textAnalyzer = analyzer.NewWithOllama(ollamaClient)
 		}
 	} else {
-		log.Println("Ollama disabled, using rule-based analysis")
+		logger.Info("Ollama disabled, using rule-based analysis")
 		textAnalyzer = analyzer.New()
 	}
 
 	// Initialize API handler
-	handler := api.NewHandler(db, textAnalyzer)
+	apiHandler := api.NewHandler(db, textAnalyzer)
+
+	// Wrap handler with tracing middleware
+	handler := tracing.HTTPMiddleware("textanalyzer")(apiHandler)
 
 	// Create server with extended timeouts for AI processing
 	srv := &http.Server{
@@ -75,9 +106,17 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("Server starting on port %s", *port)
+		logger.Info("textanalyzer service starting",
+			"port", *port,
+			"database", *dbPath,
+			"ollama_enabled", *useOllama,
+			"ollama_url", *ollamaURL,
+			"ollama_model", *ollamaModel,
+		)
+
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			logger.Error("server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -86,15 +125,16 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("shutting down server")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Error("server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server stopped")
+	logger.Info("server stopped")
 }
 
 // getEnv retrieves an environment variable or returns a default value

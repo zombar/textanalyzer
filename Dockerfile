@@ -4,14 +4,19 @@ FROM golang:1.24-alpine AS builder
 # Install minimal build dependencies
 RUN apk add --no-cache ca-certificates
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Copy shared packages
+COPY pkg/tracing ./pkg/tracing
+COPY pkg/metrics ./pkg/metrics
+
+# Copy service go mod files
+COPY apps/textanalyzer/go.mod apps/textanalyzer/go.sum ./apps/textanalyzer/
+WORKDIR /build/apps/textanalyzer
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy service source code
+COPY apps/textanalyzer ./
 
 # Build the application (pure Go)
 RUN GOOS=linux go build -a -ldflags="-s -w" -o textanalyzer ./cmd/server
@@ -25,7 +30,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy binary from builder
-COPY --from=builder /app/textanalyzer .
+COPY --from=builder /build/apps/textanalyzer/textanalyzer .
 
 # Create directory for database
 RUN mkdir -p /data

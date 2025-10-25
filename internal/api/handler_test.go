@@ -9,12 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/database"
 	"github.com/zombar/textanalyzer/internal/models"
 )
 
 func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
+	// Reset Prometheus registry to avoid metric registration conflicts between tests
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
 	dbPath := "test_api_" + time.Now().Format("20060102150405") + ".db"
 
 	db, err := database.New(dbPath)
