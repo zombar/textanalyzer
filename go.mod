@@ -7,7 +7,7 @@ toolchain go1.24.9
 require (
 	github.com/ollama/ollama v0.12.6
 	github.com/prometheus/client_golang v1.20.5
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.0
 	github.com/zombar/purpletab/pkg/metrics v0.0.0-00010101000000-000000000000
 	github.com/zombar/purpletab/pkg/tracing v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.21.0
