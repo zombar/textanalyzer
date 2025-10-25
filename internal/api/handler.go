@@ -10,27 +10,47 @@ import (
 	"time"
 
 	"github.com/rs/cors"
+	"github.com/zombar/purpletab/pkg/metrics"
+	"github.com/zombar/purpletab/pkg/tracing"
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/database"
 	"github.com/zombar/textanalyzer/internal/models"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Handler handles HTTP requests
 type Handler struct {
-	db       *database.DB
-	analyzer *analyzer.Analyzer
-	mux      *http.ServeMux
+	db          *database.DB
+	analyzer    *analyzer.Analyzer
+	mux         *http.ServeMux
+	httpMetrics *metrics.HTTPMetrics
+	dbMetrics   *metrics.DatabaseMetrics
 }
 
-// NewHandler creates a new API handler with CORS support
+// NewHandler creates a new API handler with CORS support and metrics
 func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
+	// Initialize Prometheus metrics
+	httpMetrics := metrics.NewHTTPMetrics("textanalyzer")
+	dbMetrics := metrics.NewDatabaseMetrics("textanalyzer")
+
 	h := &Handler{
-		db:       db,
-		analyzer: analyzer,
-		mux:      http.NewServeMux(),
+		db:          db,
+		analyzer:    analyzer,
+		mux:         http.NewServeMux(),
+		httpMetrics: httpMetrics,
+		dbMetrics:   dbMetrics,
 	}
 
 	h.setupRoutes()
+
+	// Start periodic database stats collection
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			dbMetrics.UpdateDBStats(db.Conn())
+		}
+	}()
 
 	// Setup CORS
 	c := cors.New(cors.Options{
@@ -40,11 +60,13 @@ func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
 		AllowCredentials: true,
 	})
 
-	return c.Handler(h.mux)
+	// Wrap with metrics middleware
+	return httpMetrics.HTTPMiddleware(c.Handler(h.mux))
 }
 
 // setupRoutes configures all API routes
 func (h *Handler) setupRoutes() {
+	h.mux.Handle("/metrics", metrics.Handler()) // Prometheus metrics endpoint
 	h.mux.HandleFunc("/api/analyze", h.handleAnalyze)
 	h.mux.HandleFunc("/api/analyses", h.handleListAnalyses)
 	h.mux.HandleFunc("/api/analyses/", h.handleAnalysisOperations)
@@ -84,23 +106,59 @@ func (h *Handler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add text length to span
+	tracing.SetSpanAttributes(r.Context(),
+		attribute.Int("text.length", len(req.Text)))
+
 	// Perform analysis in a goroutine
 	resultChan := make(chan *models.Analysis)
 	errorChan := make(chan error)
 
+	// Pass context to goroutine for tracing
+	ctx := r.Context()
+
 	go func() {
+		analysisID := generateID()
+
+		// Create span for AI analysis
+		ctx, analyzeSpan := tracing.StartSpan(ctx, "ai.analyze_text")
+		analyzeSpan.SetAttributes(
+			attribute.String("analysis.id", analysisID),
+			attribute.Int("text.length", len(req.Text)))
+
+		metadata := h.analyzer.Analyze(req.Text)
+
+		// Add result metrics
+		if len(metadata.Tags) > 0 {
+			analyzeSpan.SetAttributes(attribute.StringSlice("analysis.tags", metadata.Tags))
+		}
+		if metadata.Synopsis != "" {
+			analyzeSpan.SetAttributes(attribute.Int("synopsis.length", len(metadata.Synopsis)))
+		}
+		analyzeSpan.End()
+
 		analysis := &models.Analysis{
-			ID:        generateID(),
+			ID:        analysisID,
 			Text:      req.Text,
-			Metadata:  h.analyzer.Analyze(req.Text),
+			Metadata:  metadata,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
 
+		// Create span for database save
+		ctx, saveSpan := tracing.StartSpan(ctx, "database.save_analysis")
+		saveSpan.SetAttributes(attribute.String("analysis.id", analysisID))
+
 		if err := h.db.SaveAnalysis(analysis); err != nil {
+			tracing.RecordError(ctx, err)
+			saveSpan.End()
 			errorChan <- err
 			return
 		}
+
+		tracing.AddEvent(ctx, "analysis_saved",
+			attribute.String("analysis.id", analysisID))
+		saveSpan.End()
 
 		resultChan <- analysis
 	}()
@@ -155,7 +213,7 @@ func (h *Handler) handleListAnalyses(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, analyses, http.StatusOK)
 	case err := <-errorChan:
 		respondError(w, err.Error(), http.StatusInternalServerError)
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -201,7 +259,7 @@ func (h *Handler) getAnalysis(w http.ResponseWriter, r *http.Request, id string)
 		} else {
 			respondError(w, err.Error(), http.StatusInternalServerError)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -228,7 +286,7 @@ func (h *Handler) deleteAnalysis(w http.ResponseWriter, r *http.Request, id stri
 		} else {
 			respondError(w, err.Error(), http.StatusInternalServerError)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -274,7 +332,7 @@ func (h *Handler) getAnalysisByUUID(w http.ResponseWriter, uuid string) {
 		} else {
 			respondError(w, err.Error(), http.StatusInternalServerError)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -301,7 +359,7 @@ func (h *Handler) deleteAnalysisByUUID(w http.ResponseWriter, uuid string) {
 		} else {
 			respondError(w, err.Error(), http.StatusInternalServerError)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -337,7 +395,7 @@ func (h *Handler) handleSearchByTag(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, analyses, http.StatusOK)
 	case err := <-errorChan:
 		respondError(w, err.Error(), http.StatusInternalServerError)
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
@@ -373,7 +431,7 @@ func (h *Handler) handleSearchByReference(w http.ResponseWriter, r *http.Request
 		respondJSON(w, analyses, http.StatusOK)
 	case err := <-errorChan:
 		respondError(w, err.Error(), http.StatusInternalServerError)
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		respondError(w, "Request timeout", http.StatusRequestTimeout)
 	}
 }
