@@ -27,7 +27,7 @@ func main() {
 	logger.Info("textanalyzer service initializing", "version", "1.0.0")
 
 	// Initialize tracing
-	tp, err := tracing.InitTracer("purpletab-textanalyzer")
+	tp, err := tracing.InitTracer("docutab-textanalyzer")
 	if err != nil {
 		logger.Warn("failed to initialize tracer, continuing without tracing", "error", err)
 	} else {
