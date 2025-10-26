@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/zombar/textanalyzer/internal/api"
 	"github.com/zombar/textanalyzer/internal/database"
 	"github.com/zombar/textanalyzer/internal/ollama"
+	"github.com/zombar/textanalyzer/internal/queue"
 	"github.com/zombar/textanalyzer/pkg/logging"
 )
 
@@ -47,13 +49,19 @@ func main() {
 	ollamaURLDefault := getEnv("OLLAMA_URL", "http://localhost:11434")
 	ollamaModelDefault := getEnv("OLLAMA_MODEL", "gpt-oss:20b")
 	useOllamaDefault := getEnvBool("USE_OLLAMA", true)
+	redisAddrDefault := getEnv("REDIS_ADDR", "localhost:6379")
+	workerConcurrencyDefault := getEnvInt("WORKER_CONCURRENCY", 5)
+	ollamaMaxRetriesDefault := getEnvInt("OLLAMA_MAX_RETRIES", 10)
 
 	var (
-		port        = flag.String("port", portDefault, "Server port (env: PORT)")
-		dbPath      = flag.String("db", dbPathDefault, "Database file path (env: DB_PATH)")
-		ollamaURL   = flag.String("ollama-url", ollamaURLDefault, "Ollama API URL (env: OLLAMA_URL)")
-		ollamaModel = flag.String("ollama-model", ollamaModelDefault, "Ollama model to use (env: OLLAMA_MODEL)")
-		useOllama   = flag.Bool("use-ollama", useOllamaDefault, "Enable Ollama for AI-powered analysis (env: USE_OLLAMA)")
+		port              = flag.String("port", portDefault, "Server port (env: PORT)")
+		dbPath            = flag.String("db", dbPathDefault, "Database file path (env: DB_PATH)")
+		ollamaURL         = flag.String("ollama-url", ollamaURLDefault, "Ollama API URL (env: OLLAMA_URL)")
+		ollamaModel       = flag.String("ollama-model", ollamaModelDefault, "Ollama model to use (env: OLLAMA_MODEL)")
+		useOllama         = flag.Bool("use-ollama", useOllamaDefault, "Enable Ollama for AI-powered analysis (env: USE_OLLAMA)")
+		redisAddr         = flag.String("redis-addr", redisAddrDefault, "Redis address for queue (env: REDIS_ADDR)")
+		workerConcurrency = flag.Int("worker-concurrency", workerConcurrencyDefault, "Worker concurrency (env: WORKER_CONCURRENCY)")
+		ollamaMaxRetries  = flag.Int("ollama-max-retries", ollamaMaxRetriesDefault, "Max retries for Ollama tasks (env: OLLAMA_MAX_RETRIES)")
 	)
 	flag.Parse()
 
@@ -102,12 +110,41 @@ func main() {
 		textAnalyzer = analyzer.New()
 	}
 
-	// Initialize API handler
-	apiHandler := api.NewHandler(db, textAnalyzer)
+	// Initialize queue client
+	queueClient := queue.NewClient(queue.ClientConfig{
+		RedisAddr: *redisAddr,
+	})
+	logger.Info("queue client initialized", "redis_addr", *redisAddr)
 
-	// Wrap handler with middleware chain: HTTP logging -> tracing -> handlers
+	// Initialize queue worker
+	queueWorker := queue.NewWorker(
+		queue.WorkerConfig{
+			RedisAddr:   *redisAddr,
+			Concurrency: *workerConcurrency,
+			MaxRetries:  *ollamaMaxRetries,
+		},
+		db,
+		textAnalyzer,
+		queueClient,
+	)
+
+	// Start worker in a goroutine
+	go func() {
+		logger.Info("starting queue worker")
+		if err := queueWorker.Start(); err != nil {
+			logger.Error("queue worker error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Initialize API handler with queue client
+	apiHandler := api.NewHandler(db, textAnalyzer, queueClient)
+
+	// Wrap handler with middleware chain: HTTP logging -> metrics -> tracing -> handlers
 	handler := logging.HTTPLoggingMiddleware(logger)(
-		tracing.HTTPMiddleware("textanalyzer")(apiHandler),
+		metrics.HTTPMiddleware("textanalyzer")(
+			tracing.HTTPMiddleware("textanalyzer")(apiHandler),
+		),
 	)
 
 	// Create server with extended timeouts for AI processing
@@ -140,10 +177,20 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("shutting down server")
+	logger.Info("shutting down server and worker")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Shutdown queue worker
+	queueWorker.Shutdown()
+	logger.Info("queue worker stopped")
+
+	// Close queue client
+	if err := queueClient.Close(); err != nil {
+		logger.Error("error closing queue client", "error", err)
+	}
+
+	// Shutdown HTTP server
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("server forced to shutdown", "error", err)
 		os.Exit(1)
@@ -164,6 +211,16 @@ func getEnv(key, defaultValue string) string {
 func getEnvBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		return value == "true" || value == "1" || value == "yes"
+	}
+	return defaultValue
+}
+
+// getEnvInt retrieves an integer environment variable or returns a default value
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
 	}
 	return defaultValue
 }
