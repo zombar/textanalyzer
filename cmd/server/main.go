@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/zombar/purpletab/pkg/metrics"
 	"github.com/zombar/purpletab/pkg/tracing"
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/api"
@@ -69,6 +70,17 @@ func main() {
 		logger.Error("failed to run migrations", "error", err)
 		os.Exit(1)
 	}
+
+	// Initialize database metrics
+	dbMetrics := metrics.NewDatabaseMetrics("textanalyzer")
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			dbMetrics.UpdateDBStats(db.Conn())
+		}
+	}()
+	logger.Info("database metrics initialized")
 
 	// Initialize analyzer
 	var textAnalyzer *analyzer.Analyzer

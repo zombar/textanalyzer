@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
-	"github.com/zombar/purpletab/pkg/metrics"
 	"github.com/zombar/purpletab/pkg/tracing"
 	"github.com/zombar/textanalyzer/internal/analyzer"
 	"github.com/zombar/textanalyzer/internal/database"
@@ -23,34 +23,20 @@ type Handler struct {
 	db          *database.DB
 	analyzer    *analyzer.Analyzer
 	mux         *http.ServeMux
-	httpMetrics *metrics.HTTPMetrics
-	dbMetrics   *metrics.DatabaseMetrics
 }
 
 // NewHandler creates a new API handler with CORS support and metrics
 func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
 	// Initialize Prometheus metrics
-	httpMetrics := metrics.NewHTTPMetrics("textanalyzer")
-	dbMetrics := metrics.NewDatabaseMetrics("textanalyzer")
 
 	h := &Handler{
 		db:          db,
 		analyzer:    analyzer,
 		mux:         http.NewServeMux(),
-		httpMetrics: httpMetrics,
-		dbMetrics:   dbMetrics,
 	}
 
 	h.setupRoutes()
 
-	// Start periodic database stats collection
-	go func() {
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			dbMetrics.UpdateDBStats(db.Conn())
-		}
-	}()
 
 	// Setup CORS
 	c := cors.New(cors.Options{
@@ -60,13 +46,13 @@ func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
 		AllowCredentials: true,
 	})
 
-	// Wrap with metrics middleware
-	return httpMetrics.HTTPMiddleware(c.Handler(h.mux))
+	// Wrap with CORS
+	return c.Handler(h.mux)
 }
 
 // setupRoutes configures all API routes
 func (h *Handler) setupRoutes() {
-	h.mux.Handle("/metrics", metrics.Handler()) // Prometheus metrics endpoint
+	h.mux.Handle("/metrics", promhttp.Handler()) // Prometheus metrics endpoint
 	h.mux.HandleFunc("/api/analyze", h.handleAnalyze)
 	h.mux.HandleFunc("/api/analyses", h.handleListAnalyses)
 	h.mux.HandleFunc("/api/analyses/", h.handleAnalysisOperations)
