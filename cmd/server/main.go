@@ -15,6 +15,7 @@ import (
 	"github.com/zombar/textanalyzer/internal/api"
 	"github.com/zombar/textanalyzer/internal/database"
 	"github.com/zombar/textanalyzer/internal/ollama"
+	"github.com/zombar/textanalyzer/pkg/logging"
 )
 
 func main() {
@@ -92,8 +93,10 @@ func main() {
 	// Initialize API handler
 	apiHandler := api.NewHandler(db, textAnalyzer)
 
-	// Wrap handler with tracing middleware
-	handler := tracing.HTTPMiddleware("textanalyzer")(apiHandler)
+	// Wrap handler with middleware chain: HTTP logging -> tracing -> handlers
+	handler := logging.HTTPLoggingMiddleware(logger)(
+		tracing.HTTPMiddleware("textanalyzer")(apiHandler),
+	)
 
 	// Create server with extended timeouts for AI processing
 	srv := &http.Server{
