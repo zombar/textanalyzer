@@ -200,27 +200,55 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		}
 
 		// Text quality scoring (with fallback to rule-based scoring)
+		// Score BOTH raw text and cleaned text, use the WORSE of the two scores
 		log.Println("Scoring text quality...")
+
+		var rawTextScore models.TextQualityScore
+		var cleanedTextScore *models.TextQualityScore
+
+		// Score raw text
 		if qualityScore, err := a.ollamaClient.ScoreTextQuality(ctx, text); err == nil {
-			metadata.QualityScore = &models.TextQualityScore{
+			rawTextScore = models.TextQualityScore{
 				Score:             qualityScore.Score,
 				Reason:            qualityScore.Reason,
 				Categories:        qualityScore.Categories,
-				IsRecommended:     qualityScore.Score >= 0.5, // Default threshold
+				IsRecommended:     qualityScore.Score >= 0.5,
 				QualityIndicators: qualityScore.QualityIndicators,
 				ProblemsDetected:  qualityScore.ProblemsDetected,
-				AIUsed:            true, // AI-powered scoring
+				AIUsed:            true,
 			}
-			log.Printf("Text quality scored (AI): score=%.2f, recommended=%v",
-				qualityScore.Score, metadata.QualityScore.IsRecommended)
+			log.Printf("Raw text quality scored (AI): score=%.2f", rawTextScore.Score)
 		} else {
 			// Fallback to rule-based scoring when Ollama is unavailable
 			log.Printf("Ollama scoring failed, using rule-based fallback: %v", err)
-			fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
-			metadata.QualityScore = &fallbackScore
-			log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
-				fallbackScore.Score, fallbackScore.IsRecommended)
+			rawTextScore = scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+			log.Printf("Raw text quality scored (fallback): score=%.2f", rawTextScore.Score)
 		}
+
+		// Score cleaned text if it exists (many quality issues only visible after cleaning)
+		if metadata.CleanedText != "" {
+			log.Println("Scoring cleaned text quality...")
+			cleanedWords := extractWords(metadata.CleanedText)
+			cleanedWordCount := len(cleanedWords)
+			cleanedScore := scoreTextQualityFallback(metadata.CleanedText, cleanedWordCount, metadata.ReadabilityScore)
+			cleanedTextScore = &cleanedScore
+			log.Printf("Cleaned text quality scored: score=%.2f", cleanedScore.Score)
+
+			// Use the WORSE of the two scores (lower score wins)
+			if cleanedScore.Score < rawTextScore.Score {
+				metadata.QualityScore = cleanedTextScore
+				log.Printf("Using cleaned text score (worse): %.2f < %.2f", cleanedScore.Score, rawTextScore.Score)
+			} else {
+				metadata.QualityScore = &rawTextScore
+				log.Printf("Using raw text score: %.2f <= %.2f", rawTextScore.Score, cleanedScore.Score)
+			}
+		} else {
+			// No cleaned text, use raw text score
+			metadata.QualityScore = &rawTextScore
+		}
+
+		log.Printf("Final text quality: score=%.2f, recommended=%v",
+			metadata.QualityScore.Score, metadata.QualityScore.IsRecommended)
 
 	} else {
 		log.Println("Ollama client not available, using rule-based analysis")
@@ -228,7 +256,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
 
-		// Add rule-based quality scoring
+		// Add rule-based quality scoring (only raw text available without Ollama)
 		fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
 		metadata.QualityScore = &fallbackScore
 		log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
@@ -1037,6 +1065,95 @@ func detectCoherenceMarkers(text string) int {
 	return markerCount
 }
 
+// detectExcessiveDates checks if the text contains an excessive number of dates
+// Returns the date count and whether it's considered excessive
+func detectExcessiveDates(text string, wordCount int) (int, bool) {
+	// Common date patterns:
+	// - MM/DD/YYYY or DD/MM/YYYY
+	// - Month DD, YYYY
+	// - DD Month YYYY
+	// - YYYY-MM-DD
+	// - Month YYYY
+
+	datePatterns := []string{
+		// Numeric dates
+		`\d{1,2}/\d{1,2}/\d{2,4}`,                    // 01/15/2024 or 15/01/24
+		`\d{1,2}-\d{1,2}-\d{2,4}`,                    // 01-15-2024 or 15-01-24
+		`\d{4}-\d{1,2}-\d{1,2}`,                      // 2024-01-15 (ISO format)
+		// Month names with years/days
+		`(?i)(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}`, // January 15, 2024
+		`(?i)\d{1,2}\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}`,   // 15 January 2024
+		`(?i)(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}`,             // January 2024
+		// Abbreviated months
+		`(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+\d{1,2},?\s+\d{4}`, // Jan 15, 2024
+	}
+
+	dateCount := 0
+	for _, pattern := range datePatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllString(text, -1)
+		dateCount += len(matches)
+	}
+
+	// Also check for standalone years (4 digits between 1900-2099)
+	yearPattern := regexp.MustCompile(`\b(19\d{2}|20\d{2})\b`)
+	yearMatches := yearPattern.FindAllString(text, -1)
+	// Only count years not already counted as part of full dates
+	dateCount += len(yearMatches)
+
+	// Excessive if more than 5 dates in short content (<500 words)
+	// or more than 1 date per 100 words in longer content
+	isExcessive := false
+	if wordCount < 500 && dateCount > 5 {
+		isExcessive = true
+	} else if wordCount >= 500 {
+		dateRatio := float64(dateCount) / float64(wordCount) * 100
+		if dateRatio > 1.0 { // More than 1 date per 100 words
+			isExcessive = true
+		}
+	}
+
+	return dateCount, isExcessive
+}
+
+// detectDoubleSpacing checks if the text has excessive whitespace between sentences
+// Returns true if more than 50% of sentences are separated by double spaces or multiple newlines
+func detectDoubleSpacing(text string) (bool, float64) {
+	// Split by sentence endings
+	sentences := regexp.MustCompile(`[.!?]+`).Split(text, -1)
+
+	if len(sentences) < 2 {
+		return false, 0.0
+	}
+
+	doubleSpacedCount := 0
+	totalTransitions := 0
+
+	// Check for double spaces between sentences
+	doubleSpacePattern := regexp.MustCompile(`[.!?]\s{2,}`)
+	doubleSpaceMatches := doubleSpacePattern.FindAllString(text, -1)
+	doubleSpacedCount = len(doubleSpaceMatches)
+
+	// Check for excessive newlines between content
+	multiNewlinePattern := regexp.MustCompile(`\n\s*\n\s*\n`)
+	multiNewlineMatches := multiNewlinePattern.FindAllString(text, -1)
+	doubleSpacedCount += len(multiNewlineMatches)
+
+	// Total possible transitions is sentences - 1
+	totalTransitions = len(sentences) - 1
+	if totalTransitions == 0 {
+		return false, 0.0
+	}
+
+	// Calculate ratio
+	doubleSpaceRatio := float64(doubleSpacedCount) / float64(totalTransitions)
+
+	// Excessive if more than 50% of sentence transitions have double spacing
+	isExcessive := doubleSpaceRatio > 0.5
+
+	return isExcessive, doubleSpaceRatio
+}
+
 // scoreTextQualityFallback provides rule-based text quality scoring when Ollama is unavailable
 func scoreTextQualityFallback(text string, wordCount int, readabilityScore float64) models.TextQualityScore {
 	score := 0.5 // Start with neutral score
@@ -1209,6 +1326,29 @@ func scoreTextQualityFallback(text string, wordCount int, readabilityScore float
 		categories = append(categories, "incoherent", "low_quality")
 		problemsDetected = append(problemsDetected, "excessive_character_repetition", "possibly_gibberish")
 		reasons = append(reasons, "Excessive repeated characters (gibberish)")
+	}
+
+	// Check for excessive dates
+	dateCount, hasExcessiveDates := detectExcessiveDates(text, wordCount)
+	if hasExcessiveDates {
+		score -= 0.3
+		problemsDetected = append(problemsDetected, "excessive_dates")
+		reasons = append(reasons, "Excessive dates in content")
+		if dateCount > 10 {
+			categories = append(categories, "list_like", "low_quality")
+		}
+	}
+
+	// Check for double spacing
+	hasDoubleSpacing, doubleSpaceRatio := detectDoubleSpacing(text)
+	if hasDoubleSpacing {
+		score -= 0.3
+		problemsDetected = append(problemsDetected, "excessive_whitespace", "double_spaced")
+		reasons = append(reasons, "Excessive whitespace between sentences")
+	} else if doubleSpaceRatio > 0.3 {
+		// More than 30% but not quite excessive
+		score -= 0.1
+		problemsDetected = append(problemsDetected, "inconsistent_spacing")
 	}
 
 	// Check for educational/informative keywords
