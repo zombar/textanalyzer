@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"log/slog"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -9,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 

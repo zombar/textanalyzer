@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"log/slog"
+	"log"
 	"regexp"
 	"strings"
 )
@@ -24,16 +24,16 @@ type ParagraphScore struct {
 // cleanTextOffline performs sophisticated offline text cleaning using heuristics
 // This provides a clean article text that can be used as a template for AI enhancement
 func (a *Analyzer) cleanTextOffline(text string) string {
-	slog.Info("starting offline text cleaning with advanced heuristics")
+	log.Println("Starting offline text cleaning with advanced heuristics...")
 
 	// Split into paragraphs
 	paragraphs := splitIntoParagraphs(text)
 	if len(paragraphs) == 0 {
-		slog.Info("no paragraphs found, returning original text")
+		log.Println("No paragraphs found, returning original text")
 		return text
 	}
 
-	slog.Info("analyzing paragraphs", "count", len(paragraphs))
+	log.Printf("Analyzing %d paragraphs...", len(paragraphs))
 
 	// Score each paragraph
 	scores := make([]ParagraphScore, 0, len(paragraphs))
@@ -44,7 +44,7 @@ func (a *Analyzer) cleanTextOffline(text string) string {
 
 	// Calculate threshold - keep paragraphs above median score
 	threshold := calculateDynamicThreshold(scores)
-	slog.Info("paragraph quality threshold", "threshold", threshold)
+	log.Printf("Paragraph quality threshold: %.2f", threshold)
 
 	// Filter paragraphs and reconstruct clean text
 	cleanParagraphs := make([]string, 0, len(paragraphs))
@@ -58,12 +58,12 @@ func (a *Analyzer) cleanTextOffline(text string) string {
 		} else {
 			removed++
 			if len(score.Reasons) > 0 {
-				slog.Info("removed paragraph", "index", i+1, "score", score.Score, "reasons", strings.Join(score.Reasons, ", "))
+				log.Printf("Removed paragraph %d (score=%.2f): %s", i+1, score.Score, strings.Join(score.Reasons, ", "))
 			}
 		}
 	}
 
-	slog.Info("offline cleaning complete", "kept", kept, "removed", removed)
+	log.Printf("Offline cleaning complete: kept %d paragraphs, removed %d", kept, removed)
 
 	cleanText := strings.Join(cleanParagraphs, "\n\n")
 	return cleanText

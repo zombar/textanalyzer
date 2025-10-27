@@ -84,10 +84,8 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 	const QUALITY_THRESHOLD = 0.35 // Skip AI processing for content below this threshold
 
 	if earlyQualityScore.Score < QUALITY_THRESHOLD {
-		slog.Warn("content quality too low, skipping AI analysis",
-			"score", earlyQualityScore.Score,
-			"threshold", QUALITY_THRESHOLD,
-			"reason", earlyQualityScore.Reason)
+		log.Printf("Content quality too low (%.2f < %.2f), skipping AI analysis. Reason: %s",
+			earlyQualityScore.Score, QUALITY_THRESHOLD, earlyQualityScore.Reason)
 
 		// Return minimal metadata with quality score
 		metadata.QualityScore = &earlyQualityScore
@@ -103,9 +101,8 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		return metadata
 	}
 
-	slog.Info("content quality sufficient, proceeding with AI analysis",
-		"score", earlyQualityScore.Score,
-		"threshold", QUALITY_THRESHOLD)
+	log.Printf("Content quality sufficient (%.2f >= %.2f), proceeding with AI analysis",
+		earlyQualityScore.Score, QUALITY_THRESHOLD)
 
 	// AI-powered analysis (if Ollama client is available)
 	if a.ollamaClient != nil {
@@ -161,7 +158,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 				mergedTags = append(mergedTags, tag)
 			}
 			metadata.Tags = mergedTags
-			slog.Info("merged tags", "computed", len(computedTags), "ai", len(aiTags), "total", len(mergedTags))
+			log.Printf("Merged %d computed tags + %d AI tags = %d total tags", len(computedTags), len(aiTags), len(mergedTags))
 		} else {
 			slog.Warn("AI tag generation failed, using computed tags only", "error", err)
 			metadata.Tags = computedTags
@@ -196,7 +193,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 				Indicators: aiDetection.Indicators,
 				HumanScore: aiDetection.HumanScore,
 			}
-			slog.Info("AI detection completed",
+			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
 				aiDetection.Likelihood, aiDetection.HumanScore)
 		} else {
 			slog.Warn("AI detection failed", "error", err)
@@ -220,12 +217,12 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 				ProblemsDetected:  qualityScore.ProblemsDetected,
 				AIUsed:            true,
 			}
-			slog.Info("raw text quality scored (AI)", "score", rawTextScore.Score)
+			log.Printf("Raw text quality scored (AI): score=%.2f", rawTextScore.Score)
 		} else {
 			// Fallback to rule-based scoring when Ollama is unavailable
 			slog.Warn("ollama scoring failed, using rule-based fallback", "error", err)
 			rawTextScore = scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
-			slog.Info("raw text quality scored (fallback)", "score", rawTextScore.Score)
+			log.Printf("Raw text quality scored (fallback): score=%.2f", rawTextScore.Score)
 		}
 
 		// Score cleaned text if it exists (many quality issues only visible after cleaning)
@@ -235,27 +232,26 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			cleanedWordCount := len(cleanedWords)
 			cleanedScore := scoreTextQualityFallback(metadata.CleanedText, cleanedWordCount, metadata.ReadabilityScore)
 			cleanedTextScore = &cleanedScore
-			slog.Info("cleaned text quality scored", "score", cleanedScore.Score)
+			log.Printf("Cleaned text quality scored: score=%.2f", cleanedScore.Score)
 
 			// Use the WORSE of the two scores (lower score wins)
 			if cleanedScore.Score < rawTextScore.Score {
 				metadata.QualityScore = cleanedTextScore
-				slog.Info("using cleaned text score (worse)", "cleaned", cleanedScore.Score, "raw", rawTextScore.Score)
+				log.Printf("Using cleaned text score (worse): %.2f < %.2f", cleanedScore.Score, rawTextScore.Score)
 			} else {
 				metadata.QualityScore = &rawTextScore
-				slog.Info("using raw text score", "raw", rawTextScore.Score, "cleaned", cleanedScore.Score)
+				log.Printf("Using raw text score: %.2f <= %.2f", rawTextScore.Score, cleanedScore.Score)
 			}
 		} else {
 			// No cleaned text, use raw text score
 			metadata.QualityScore = &rawTextScore
 		}
 
-		slog.Info("final text quality",
-			"score", metadata.QualityScore.Score,
-			"recommended", metadata.QualityScore.IsRecommended)
+		log.Printf("Final text quality: score=%.2f, recommended=%v",
+			metadata.QualityScore.Score, metadata.QualityScore.IsRecommended)
 
 	} else {
-		slog.Info("ollama client not available, using rule-based analysis")
+		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
@@ -263,8 +259,8 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		// Add rule-based quality scoring (only raw text available without Ollama)
 		fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
 		metadata.QualityScore = &fallbackScore
-		slog.Info("text quality scored (fallback)",
-			"score", fallbackScore.Score, "is_recommended", fallbackScore.IsRecommended)
+		log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+			fallbackScore.Score, fallbackScore.IsRecommended)
 	}
 
 	// Language indicators
@@ -318,10 +314,9 @@ func (a *Analyzer) AnalyzeOffline(text string) models.Metadata {
 	// This extracts article content and removes boilerplate/navigation
 	metadata.CleanedText = a.cleanTextOffline(text)
 	cleanedWordCount := len(extractWords(metadata.CleanedText))
-	slog.Info("offline cleaning complete",
-		"original_words", metadata.WordCount,
-		"cleaned_words", cleanedWordCount,
-		"reduction_percent", 100*(1-float64(cleanedWordCount)/float64(metadata.WordCount)))
+	log.Printf("Offline cleaning: %d words → %d words (%.1f%% reduction)",
+		metadata.WordCount, cleanedWordCount,
+		100*(1-float64(cleanedWordCount)/float64(metadata.WordCount)))
 
 	// Rule-based quality scoring
 	qualityScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
@@ -337,10 +332,8 @@ func (a *Analyzer) AnalyzeOffline(text string) models.Metadata {
 	metadata.ExclamationCount = strings.Count(text, "!")
 	metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
 
-	slog.Info("offline analysis completed",
-		"word_count", metadata.WordCount,
-		"quality_score", qualityScore.Score,
-		"language", metadata.Language)
+	log.Printf("Offline analysis completed: %d words, quality=%.2f, language=%s",
+		metadata.WordCount, qualityScore.Score, metadata.Language)
 
 	return metadata
 }
@@ -380,9 +373,8 @@ func (a *Analyzer) ExtractImageMetadata(imageURL string) map[string]interface{} 
 	// TODO: When Ollama supports vision models, add AI image analysis here
 	metadata["ai_analysis_pending"] = true
 
-	slog.Info("offline image metadata extracted",
-		"url", imageURL,
-		"format", metadata["format"])
+	log.Printf("Offline image metadata extracted: url=%s, format=%s",
+		imageURL, metadata["format"])
 
 	return metadata
 }
@@ -1471,21 +1463,21 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 
 	// AI-powered analysis with HTML context (if Ollama client is available)
 	if a.ollamaClient != nil {
-		slog.Info("ollama client available, starting enhanced AI-powered analysis with HTML context")
+		log.Println("Ollama client available, starting enhanced AI-powered analysis with HTML context")
 
 		// Enhanced text cleaning using offline text as template and original HTML
-		slog.Info("performing enhanced text cleaning with HTML context")
+		log.Println("Performing enhanced text cleaning with HTML context...")
 		if cleanedText, err := a.ollamaClient.CleanTextWithHTMLContext(ctx, text, offlineText, originalHTML); err == nil {
 			metadata.CleanedText = cleanedText
-			slog.Info("enhanced text cleaning completed", "cleaned_length", len(cleanedText), "original_length", len(text))
+			log.Printf("Enhanced text cleaning completed: %d characters (original: %d)", len(cleanedText), len(text))
 		} else {
-			slog.Warn("enhanced text cleaning failed, falling back to standard cleaning", "error", err)
+			log.Printf("Enhanced text cleaning failed, falling back to standard cleaning: %v", err)
 			// Fallback to standard cleaning
 			if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
 				metadata.CleanedText = cleanedText
-				slog.Info("standard text cleaning completed", "length", len(cleanedText))
+				log.Printf("Standard text cleaning completed: %d characters", len(cleanedText))
 			} else {
-				slog.Warn("standard text cleaning also failed", "error", err)
+				log.Printf("Standard text cleaning also failed: %v", err)
 			}
 		}
 
@@ -1536,7 +1528,7 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 				mergedTags = append(mergedTags, tag)
 			}
 			metadata.Tags = mergedTags
-			slog.Info("merged tags", "computed", len(computedTags), "ai", len(aiTags), "total", len(mergedTags))
+			log.Printf("Merged %d computed tags + %d AI tags = %d total tags", len(computedTags), len(aiTags), len(mergedTags))
 		} else {
 			slog.Warn("AI tag generation failed, using computed tags only", "error", err)
 			metadata.Tags = computedTags
@@ -1571,7 +1563,7 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 				Indicators: aiDetection.Indicators,
 				HumanScore: aiDetection.HumanScore,
 			}
-			slog.Info("AI detection completed",
+			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
 				aiDetection.Likelihood, aiDetection.HumanScore)
 		} else {
 			slog.Warn("AI detection failed", "error", err)
@@ -1589,20 +1581,18 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 				ProblemsDetected:  qualityScore.ProblemsDetected,
 				AIUsed:            true,
 			}
-			slog.Info("text quality scored (AI)",
-				"score", qualityScore.Score,
-				"recommended", metadata.QualityScore.IsRecommended)
+			log.Printf("Text quality scored (AI): score=%.2f, recommended=%v",
+				qualityScore.Score, metadata.QualityScore.IsRecommended)
 		} else {
 			slog.Warn("ollama scoring failed, using rule-based fallback", "error", err)
 			fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
 			metadata.QualityScore = &fallbackScore
-			slog.Info("text quality scored (fallback)",
-				"score", fallbackScore.Score,
-				"recommended", fallbackScore.IsRecommended)
+			log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+				fallbackScore.Score, fallbackScore.IsRecommended)
 		}
 
 	} else {
-		slog.Info("ollama client not available, using rule-based analysis")
+		log.Println("Ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
@@ -1610,8 +1600,8 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 		// Add rule-based quality scoring
 		fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
 		metadata.QualityScore = &fallbackScore
-		slog.Info("text quality scored (fallback)",
-			"score", fallbackScore.Score, "is_recommended", fallbackScore.IsRecommended)
+		log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+			fallbackScore.Score, fallbackScore.IsRecommended)
 	}
 
 	return metadata

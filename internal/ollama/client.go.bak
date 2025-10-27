@@ -52,7 +52,7 @@ func New(ollamaURL, model string) (*Client, error) {
 
 // GenerateResponse generates a response from the LLM
 func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, error) {
-	slog.Info("ollama sending request", "model", c.model, "timeout", c.timeout)
+	log.Printf("Ollama: Sending request to model %s (timeout: %v)", c.model, c.timeout)
 
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
@@ -70,12 +70,12 @@ func (c *Client) GenerateResponse(ctx context.Context, prompt string) (string, e
 	})
 
 	if err != nil {
-		slog.Error("ollama generation failed", "error", err)
+		log.Printf("Ollama: Generation failed: %v", err)
 		return "", fmt.Errorf("generation failed: %w", err)
 	}
 
 	result := strings.TrimSpace(response.String())
-	slog.Info("ollama response received", "length", len(result))
+	log.Printf("Ollama: Response received (%d chars)", len(result))
 	return result, nil
 }
 
