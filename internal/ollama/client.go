@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ollama/ollama/api"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -40,8 +41,18 @@ func New(ollamaURL, model string) (*Client, error) {
 		return nil, fmt.Errorf("invalid Ollama URL: %w", err)
 	}
 
-	// Create client with the provided URL
-	client := api.NewClient(baseURL, http.DefaultClient)
+	// Create HTTP client with OpenTelemetry instrumentation
+	httpClient := &http.Client{
+		Timeout: DefaultTimeout,
+		Transport: otelhttp.NewTransport(http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return "ollama " + r.Method + " " + r.URL.Path
+			}),
+		),
+	}
+
+	// Create Ollama API client with instrumented HTTP client
+	client := api.NewClient(baseURL, httpClient)
 
 	return &Client{
 		client:  client,
