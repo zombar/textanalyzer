@@ -135,17 +135,33 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			log.Printf("Editorial analysis failed: %v", err)
 		}
 
+		// Generate computed tags from metadata
+		computedTags := generateTags(text, metadata)
+
 		// AI-generated tags
 		log.Println("Generating AI tags...")
 		metadataMap := map[string]interface{}{
 			"sentiment": metadata.Sentiment,
 		}
-		if tags, err := a.ollamaClient.GenerateTags(ctx, text, metadataMap); err == nil {
-			metadata.Tags = tags
-			log.Printf("Generated %d AI tags: %v", len(tags), tags)
+		if aiTags, err := a.ollamaClient.GenerateTags(ctx, text, metadataMap); err == nil {
+			// Merge AI tags with computed tags (remove duplicates)
+			tagSet := make(map[string]bool)
+			for _, tag := range computedTags {
+				tagSet[tag] = true
+			}
+			for _, tag := range aiTags {
+				tagSet[tag] = true
+			}
+
+			mergedTags := make([]string, 0, len(tagSet))
+			for tag := range tagSet {
+				mergedTags = append(mergedTags, tag)
+			}
+			metadata.Tags = mergedTags
+			log.Printf("Merged %d computed tags + %d AI tags = %d total tags", len(computedTags), len(aiTags), len(mergedTags))
 		} else {
-			log.Printf("AI tag generation failed, falling back to rule-based: %v", err)
-			metadata.Tags = generateTags(text, metadata)
+			log.Printf("AI tag generation failed, using computed tags only: %v", err)
+			metadata.Tags = computedTags
 		}
 
 		// AI-extracted and pruned references
@@ -224,6 +240,113 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 	metadata.QuestionCount = strings.Count(text, "?")
 	metadata.ExclamationCount = strings.Count(text, "!")
 	metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
+
+	return metadata
+}
+
+// AnalyzeOffline performs offline text analysis without Ollama (Stage 1)
+// This method only uses rule-based heuristics and is fast for initial processing
+func (a *Analyzer) AnalyzeOffline(text string) models.Metadata {
+	metadata := models.Metadata{}
+
+	// Basic statistics
+	metadata.CharacterCount = len(text)
+	words := extractWords(text)
+	metadata.WordCount = len(words)
+	metadata.SentenceCount = countSentences(text)
+	metadata.ParagraphCount = countParagraphs(text)
+	metadata.AverageWordLength = calculateAverageWordLength(words)
+
+	// Sentiment analysis (rule-based)
+	metadata.Sentiment, metadata.SentimentScore = analyzeSentiment(text)
+
+	// Word frequency analysis
+	metadata.TopWords = a.getTopWords(words, 20)
+	metadata.UniqueWords = countUniqueWords(words)
+
+	// Phrase analysis
+	metadata.TopPhrases = a.getTopPhrases(text, 10)
+
+	// Content extraction
+	metadata.KeyTerms = a.extractKeyTerms(words, 15)
+	metadata.NamedEntities = extractNamedEntities(text)
+	metadata.PotentialDates = extractDates(text)
+	metadata.PotentialURLs = extractURLs(text)
+	metadata.EmailAddresses = extractEmails(text)
+
+	// Readability
+	metadata.ReadabilityScore = calculateReadability(text, metadata.WordCount, metadata.SentenceCount)
+	metadata.ReadabilityLevel = getReadabilityLevel(metadata.ReadabilityScore)
+	metadata.ComplexWordCount = countComplexWords(words)
+	if metadata.SentenceCount > 0 {
+		metadata.AvgSentenceLength = float64(metadata.WordCount) / float64(metadata.SentenceCount)
+	}
+
+	// Advanced offline text cleaning using heuristics
+	// This extracts article content and removes boilerplate/navigation
+	metadata.CleanedText = a.cleanTextOffline(text)
+	cleanedWordCount := len(extractWords(metadata.CleanedText))
+	log.Printf("Offline cleaning: %d words → %d words (%.1f%% reduction)",
+		metadata.WordCount, cleanedWordCount,
+		100*(1-float64(cleanedWordCount)/float64(metadata.WordCount)))
+
+	// Rule-based quality scoring
+	qualityScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+	metadata.QualityScore = &qualityScore
+
+	// Rule-based references and tags
+	metadata.References = extractReferences(text)
+	metadata.Tags = generateTags(text, metadata)
+
+	// Language indicators
+	metadata.Language = detectLanguage(text)
+	metadata.QuestionCount = strings.Count(text, "?")
+	metadata.ExclamationCount = strings.Count(text, "!")
+	metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
+
+	log.Printf("Offline analysis completed: %d words, quality=%.2f, language=%s",
+		metadata.WordCount, qualityScore.Score, metadata.Language)
+
+	return metadata
+}
+
+// ExtractImageMetadata extracts offline metadata from an image URL
+// This is a placeholder for basic image processing without AI
+func (a *Analyzer) ExtractImageMetadata(imageURL string) map[string]interface{} {
+	metadata := make(map[string]interface{})
+
+	// Extract basic information from URL
+	metadata["url"] = imageURL
+
+	// Detect image format from URL
+	lowerURL := strings.ToLower(imageURL)
+	if strings.HasSuffix(lowerURL, ".jpg") || strings.HasSuffix(lowerURL, ".jpeg") {
+		metadata["format"] = "jpeg"
+	} else if strings.HasSuffix(lowerURL, ".png") {
+		metadata["format"] = "png"
+	} else if strings.HasSuffix(lowerURL, ".gif") {
+		metadata["format"] = "gif"
+	} else if strings.HasSuffix(lowerURL, ".webp") {
+		metadata["format"] = "webp"
+	} else if strings.HasSuffix(lowerURL, ".svg") {
+		metadata["format"] = "svg"
+	} else {
+		metadata["format"] = "unknown"
+	}
+
+	// Extract domain
+	if strings.HasPrefix(imageURL, "http://") || strings.HasPrefix(imageURL, "https://") {
+		parts := strings.Split(imageURL, "/")
+		if len(parts) >= 3 {
+			metadata["domain"] = parts[2]
+		}
+	}
+
+	// TODO: When Ollama supports vision models, add AI image analysis here
+	metadata["ai_analysis_pending"] = true
+
+	log.Printf("Offline image metadata extracted: url=%s, format=%s",
+		imageURL, metadata["format"])
 
 	return metadata
 }
@@ -1144,4 +1267,195 @@ func scoreTextQualityFallback(text string, wordCount int, readabilityScore float
 		ProblemsDetected:  problemsDetected,
 		AIUsed:            false, // Rule-based fallback
 	}
+}
+
+// AnalyzeWithHTMLContext performs AI-powered analysis using offline text as a template and original HTML
+// This provides enhanced cleaning by instructing the LLM to use the offline text as a reference
+// and extract the cleanest version from the original HTML, removing image attributions and translating to English
+func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText, originalHTML string) models.Metadata {
+	metadata := models.Metadata{}
+
+	// Basic statistics from original text
+	metadata.CharacterCount = len(text)
+	words := extractWords(text)
+	metadata.WordCount = len(words)
+	metadata.SentenceCount = countSentences(text)
+	metadata.ParagraphCount = countParagraphs(text)
+	metadata.AverageWordLength = calculateAverageWordLength(words)
+
+	// Sentiment analysis
+	metadata.Sentiment, metadata.SentimentScore = analyzeSentiment(text)
+
+	// Word frequency analysis
+	metadata.TopWords = a.getTopWords(words, 20)
+	metadata.UniqueWords = countUniqueWords(words)
+
+	// Phrase analysis
+	metadata.TopPhrases = a.getTopPhrases(text, 10)
+
+	// Content extraction
+	metadata.KeyTerms = a.extractKeyTerms(words, 15)
+	metadata.NamedEntities = extractNamedEntities(text)
+	metadata.PotentialDates = extractDates(text)
+	metadata.PotentialURLs = extractURLs(text)
+	metadata.EmailAddresses = extractEmails(text)
+
+	// Readability
+	metadata.ReadabilityScore = calculateReadability(text, metadata.WordCount, metadata.SentenceCount)
+	metadata.ReadabilityLevel = getReadabilityLevel(metadata.ReadabilityScore)
+	metadata.ComplexWordCount = countComplexWords(words)
+	if metadata.SentenceCount > 0 {
+		metadata.AvgSentenceLength = float64(metadata.WordCount) / float64(metadata.SentenceCount)
+	}
+
+	// Language indicators
+	metadata.Language = detectLanguage(text)
+	metadata.QuestionCount = strings.Count(text, "?")
+	metadata.ExclamationCount = strings.Count(text, "!")
+	metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
+
+	// AI-powered analysis with HTML context (if Ollama client is available)
+	if a.ollamaClient != nil {
+		log.Println("Ollama client available, starting enhanced AI-powered analysis with HTML context")
+
+		// Enhanced text cleaning using offline text as template and original HTML
+		log.Println("Performing enhanced text cleaning with HTML context...")
+		if cleanedText, err := a.ollamaClient.CleanTextWithHTMLContext(ctx, text, offlineText, originalHTML); err == nil {
+			metadata.CleanedText = cleanedText
+			log.Printf("Enhanced text cleaning completed: %d characters (original: %d)", len(cleanedText), len(text))
+		} else {
+			log.Printf("Enhanced text cleaning failed, falling back to standard cleaning: %v", err)
+			// Fallback to standard cleaning
+			if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
+				metadata.CleanedText = cleanedText
+				log.Printf("Standard text cleaning completed: %d characters", len(cleanedText))
+			} else {
+				log.Printf("Standard text cleaning also failed: %v", err)
+			}
+		}
+
+		// Use cleaned text for subsequent AI analysis if available
+		analysisText := text
+		if metadata.CleanedText != "" {
+			analysisText = metadata.CleanedText
+		}
+
+		// Generate synopsis
+		log.Println("Generating synopsis...")
+		if synopsis, err := a.ollamaClient.GenerateSynopsis(ctx, analysisText); err == nil {
+			metadata.Synopsis = synopsis
+			log.Printf("Synopsis generated: %d characters", len(synopsis))
+		} else {
+			log.Printf("Synopsis generation failed: %v", err)
+		}
+
+		// Editorial analysis
+		log.Println("Performing editorial analysis...")
+		if editorial, err := a.ollamaClient.EditorialAnalysis(ctx, analysisText); err == nil {
+			metadata.EditorialAnalysis = editorial
+			log.Printf("Editorial analysis completed: %d characters", len(editorial))
+		} else {
+			log.Printf("Editorial analysis failed: %v", err)
+		}
+
+		// Generate computed tags from metadata
+		computedTags := generateTags(text, metadata)
+
+		// AI-generated tags
+		log.Println("Generating AI tags...")
+		metadataMap := map[string]interface{}{
+			"sentiment": metadata.Sentiment,
+		}
+		if aiTags, err := a.ollamaClient.GenerateTags(ctx, analysisText, metadataMap); err == nil {
+			// Merge AI tags with computed tags (remove duplicates)
+			tagSet := make(map[string]bool)
+			for _, tag := range computedTags {
+				tagSet[tag] = true
+			}
+			for _, tag := range aiTags {
+				tagSet[tag] = true
+			}
+
+			mergedTags := make([]string, 0, len(tagSet))
+			for tag := range tagSet {
+				mergedTags = append(mergedTags, tag)
+			}
+			metadata.Tags = mergedTags
+			log.Printf("Merged %d computed tags + %d AI tags = %d total tags", len(computedTags), len(aiTags), len(mergedTags))
+		} else {
+			log.Printf("AI tag generation failed, using computed tags only: %v", err)
+			metadata.Tags = computedTags
+		}
+
+		// AI-extracted and pruned references
+		log.Println("Extracting references with AI...")
+		if refs, err := a.ollamaClient.ExtractReferences(ctx, analysisText); err == nil {
+			// Convert ollama.Reference to models.Reference
+			metadata.References = make([]models.Reference, len(refs))
+			for i, ref := range refs {
+				metadata.References[i] = models.Reference{
+					Text:       ref.Text,
+					Type:       ref.Type,
+					Context:    ref.Context,
+					Confidence: ref.Confidence,
+				}
+			}
+			log.Printf("Extracted %d AI references", len(refs))
+		} else {
+			log.Printf("AI reference extraction failed, falling back to rule-based: %v", err)
+			metadata.References = extractReferences(text)
+		}
+
+		// AI content detection
+		log.Println("Detecting AI-generated content...")
+		if aiDetection, err := a.ollamaClient.DetectAIContent(ctx, analysisText); err == nil {
+			metadata.AIDetection = models.AIDetectionResult{
+				Likelihood: aiDetection.Likelihood,
+				Confidence: aiDetection.Confidence,
+				Reasoning:  aiDetection.Reasoning,
+				Indicators: aiDetection.Indicators,
+				HumanScore: aiDetection.HumanScore,
+			}
+			log.Printf("AI detection completed: likelihood=%s, human_score=%.1f",
+				aiDetection.Likelihood, aiDetection.HumanScore)
+		} else {
+			log.Printf("AI detection failed: %v", err)
+		}
+
+		// Text quality scoring (with fallback to rule-based scoring)
+		log.Println("Scoring text quality...")
+		if qualityScore, err := a.ollamaClient.ScoreTextQuality(ctx, analysisText); err == nil {
+			metadata.QualityScore = &models.TextQualityScore{
+				Score:             qualityScore.Score,
+				Reason:            qualityScore.Reason,
+				Categories:        qualityScore.Categories,
+				IsRecommended:     qualityScore.Score >= 0.5,
+				QualityIndicators: qualityScore.QualityIndicators,
+				ProblemsDetected:  qualityScore.ProblemsDetected,
+				AIUsed:            true,
+			}
+			log.Printf("Text quality scored (AI): score=%.2f, recommended=%v",
+				qualityScore.Score, metadata.QualityScore.IsRecommended)
+		} else {
+			log.Printf("Ollama scoring failed, using rule-based fallback: %v", err)
+			fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+			metadata.QualityScore = &fallbackScore
+			log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+				fallbackScore.Score, fallbackScore.IsRecommended)
+		}
+
+	} else {
+		log.Println("Ollama client not available, using rule-based analysis")
+		// Fallback to rule-based analysis when Ollama is not available
+		metadata.References = extractReferences(text)
+		metadata.Tags = generateTags(text, metadata)
+
+		// Add rule-based quality scoring
+		fallbackScore := scoreTextQualityFallback(text, metadata.WordCount, metadata.ReadabilityScore)
+		metadata.QualityScore = &fallbackScore
+		log.Printf("Text quality scored (fallback): score=%.2f, recommended=%v",
+			fallbackScore.Score, fallbackScore.IsRecommended)
+	}
+
+	return metadata
 }
