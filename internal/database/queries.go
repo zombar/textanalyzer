@@ -22,13 +22,24 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 	}
 	defer tx.Rollback()
 
-	// Insert analysis
+	// Insert or replace analysis (use REPLACE to handle updates during enrichment)
 	_, err = tx.Exec(`
-		INSERT INTO analyses (id, text, metadata, created_at, updated_at)
+		INSERT OR REPLACE INTO analyses (id, text, metadata, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 	`, analysis.ID, analysis.Text, metadataJSON, analysis.CreatedAt, analysis.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert analysis: %w", err)
+	}
+
+	// Delete existing tags and references for this analysis to avoid duplicates
+	_, err = tx.Exec(`DELETE FROM tags WHERE analysis_id = ?`, analysis.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing tags: %w", err)
+	}
+
+	_, err = tx.Exec(`DELETE FROM text_references WHERE analysis_id = ?`, analysis.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing references: %w", err)
 	}
 
 	// Insert tags
