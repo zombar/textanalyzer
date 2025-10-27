@@ -813,43 +813,50 @@ func extractContext(text, match string, contextLength int) string {
 
 // generateTags generates tags based on content
 func generateTags(text string, metadata models.Metadata) []string {
-	tags := []string{}
+	// Use map to deduplicate tags
+	tagSet := make(map[string]bool)
 
 	// Sentiment tag
-	tags = append(tags, normalizeTag(metadata.Sentiment))
+	tagSet[normalizeTag(metadata.Sentiment)] = true
 
 	// Length tags
 	if metadata.WordCount < 100 {
-		tags = append(tags, "short")
+		tagSet["short"] = true
 	} else if metadata.WordCount < 500 {
-		tags = append(tags, "medium")
+		tagSet["medium"] = true
 	} else {
-		tags = append(tags, "long")
+		tagSet["long"] = true
 	}
 
 	// Readability tags (normalize in case they have underscores)
-	tags = append(tags, normalizeTag(metadata.ReadabilityLevel))
+	tagSet[normalizeTag(metadata.ReadabilityLevel)] = true
 
 	// Content type tags
 	if metadata.QuestionCount > 3 {
-		tags = append(tags, "faq")
+		tagSet["faq"] = true
 	}
 	if len(metadata.PotentialURLs) > 2 {
-		tags = append(tags, "web-content")
+		tagSet["web-content"] = true
 	}
 	if len(metadata.References) > 5 {
-		tags = append(tags, "research")
+		tagSet["research"] = true
 	}
 
 	// Topic tags from key terms (top 3) - normalize them
 	for i := 0; i < len(metadata.KeyTerms) && i < 3; i++ {
-		tags = append(tags, normalizeTag(metadata.KeyTerms[i]))
+		tagSet[normalizeTag(metadata.KeyTerms[i])] = true
 	}
 
 	// Named entities make good tags (people, places, things)
 	// Add up to 5 named entities as tags
 	for i := 0; i < len(metadata.NamedEntities) && i < 5; i++ {
-		tags = append(tags, normalizeTag(metadata.NamedEntities[i]))
+		tagSet[normalizeTag(metadata.NamedEntities[i])] = true
+	}
+
+	// Convert set to slice
+	tags := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		tags = append(tags, tag)
 	}
 
 	return tags
