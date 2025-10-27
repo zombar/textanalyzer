@@ -1,17 +1,19 @@
 package database
 
 import (
-	"os"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/zombar/textanalyzer/internal/models"
 )
 
-func setupTestDB(t *testing.T) (*DB, func()) {
-	dbPath := "test_" + time.Now().Format("20060102150405") + ".db"
+func setupTestDatabase(t *testing.T) (*DB, func()) {
+	t.Helper()
+	testName := fmt.Sprintf("queries_%d", time.Now().UnixNano())
+	connStr, dbCleanup := setupTestDB(t, testName)
 
-	db, err := New(dbPath)
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
@@ -22,7 +24,7 @@ func setupTestDB(t *testing.T) (*DB, func()) {
 
 	cleanup := func() {
 		db.Close()
-		os.Remove(dbPath)
+		dbCleanup()
 	}
 
 	return db, cleanup
@@ -68,7 +70,7 @@ func createTestAnalysis(id string) *models.Analysis {
 }
 
 func TestSaveAnalysis(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	analysis := createTestAnalysis("test-001")
@@ -80,7 +82,7 @@ func TestSaveAnalysis(t *testing.T) {
 }
 
 func TestGetAnalysis(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	analysis := createTestAnalysis("test-002")
@@ -108,7 +110,7 @@ func TestGetAnalysis(t *testing.T) {
 }
 
 func TestGetAnalysisNotFound(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	_, err := db.GetAnalysis("nonexistent")
@@ -122,7 +124,7 @@ func TestGetAnalysisNotFound(t *testing.T) {
 }
 
 func TestListAnalyses(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	// Save multiple analyses
@@ -156,7 +158,7 @@ func TestListAnalyses(t *testing.T) {
 }
 
 func TestGetAnalysesByTag(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	// Create analyses with different tags
@@ -211,7 +213,7 @@ func TestGetAnalysesByTag(t *testing.T) {
 }
 
 func TestDeleteAnalysis(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	analysis := createTestAnalysis("test-delete-001")
@@ -234,7 +236,7 @@ func TestDeleteAnalysis(t *testing.T) {
 }
 
 func TestDeleteAnalysisNotFound(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	err := db.DeleteAnalysis("nonexistent")
@@ -248,10 +250,10 @@ func TestDeleteAnalysisNotFound(t *testing.T) {
 }
 
 func TestMigrations(t *testing.T) {
-	dbPath := "test_migrations.db"
-	defer os.Remove(dbPath)
+	connStr, dbCleanup := setupTestDB(t, "test_migrations")
+	defer dbCleanup()
 
-	db, err := New(dbPath)
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
@@ -262,9 +264,9 @@ func TestMigrations(t *testing.T) {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	// Verify tables exist
+	// Verify tables exist using PostgreSQL information_schema
 	var count int
-	err = db.conn.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='analyses'").Scan(&count)
+	err = db.conn.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='analyses'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check analyses table: %v", err)
 	}
@@ -272,7 +274,7 @@ func TestMigrations(t *testing.T) {
 		t.Error("analyses table should exist")
 	}
 
-	err = db.conn.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tags'").Scan(&count)
+	err = db.conn.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='tags'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check tags table: %v", err)
 	}
@@ -287,7 +289,7 @@ func TestMigrations(t *testing.T) {
 }
 
 func TestCascadeDelete(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDatabase(t)
 	defer cleanup()
 
 	analysis := createTestAnalysis("test-cascade-001")
@@ -296,9 +298,9 @@ func TestCascadeDelete(t *testing.T) {
 		t.Fatalf("Failed to save analysis: %v", err)
 	}
 
-	// Verify tags exist
+	// Verify tags exist (using PostgreSQL placeholder $1)
 	var tagCount int
-	err := db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = ?", "test-cascade-001").Scan(&tagCount)
+	err := db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags: %v", err)
 	}
@@ -312,8 +314,8 @@ func TestCascadeDelete(t *testing.T) {
 		t.Fatalf("Failed to delete analysis: %v", err)
 	}
 
-	// Verify tags are deleted
-	err = db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = ?", "test-cascade-001").Scan(&tagCount)
+	// Verify tags are deleted (using PostgreSQL placeholder $1)
+	err = db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags after delete: %v", err)
 	}

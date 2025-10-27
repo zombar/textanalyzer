@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -27,9 +27,10 @@ func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 	// Reset Prometheus registry to avoid metric registration conflicts between tests
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
 
-	dbPath := "test_api_" + time.Now().Format("20060102150405") + ".db"
+	testName := fmt.Sprintf("api_%d", time.Now().UnixNano())
+	connStr, dbCleanup := setupTestDB(t, testName)
 
-	db, err := database.New(dbPath)
+	db, err := database.New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
@@ -53,7 +54,7 @@ func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 
 	cleanup := func() {
 		db.Close()
-		os.Remove(dbPath)
+		dbCleanup()
 	}
 
 	return handler, db, cleanup

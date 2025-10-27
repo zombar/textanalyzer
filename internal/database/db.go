@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 // DB represents the database connection
@@ -12,20 +12,16 @@ type DB struct {
 	conn *sql.DB
 }
 
-// New creates a new database connection
-func New(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite", path)
+// New creates a new PostgreSQL database connection
+// PostgreSQL format: "host=... user=... password=... dbname=... port=..."
+func New(connStr string) (*DB, error) {
+	conn, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	// Enable foreign keys for SQLite
-	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	return &DB{conn: conn}, nil

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -45,7 +46,6 @@ func main() {
 
 	// Get default values from environment variables, with fallbacks
 	portDefault := getEnv("PORT", "8080")
-	dbPathDefault := getEnv("DB_PATH", "textanalyzer.db")
 	ollamaURLDefault := getEnv("OLLAMA_URL", "http://localhost:11434")
 	ollamaModelDefault := getEnv("OLLAMA_MODEL", "gpt-oss:20b")
 	useOllamaDefault := getEnvBool("USE_OLLAMA", true)
@@ -53,9 +53,15 @@ func main() {
 	workerConcurrencyDefault := getEnvInt("WORKER_CONCURRENCY", 5)
 	ollamaMaxRetriesDefault := getEnvInt("OLLAMA_MAX_RETRIES", 10)
 
+	// PostgreSQL environment variables
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "docutab")
+	dbPassword := getEnv("DB_PASSWORD", "docutab_dev_pass")
+	dbName := getEnv("DB_NAME", "docutab")
+
 	var (
 		port              = flag.String("port", portDefault, "Server port (env: PORT)")
-		dbPath            = flag.String("db", dbPathDefault, "Database file path (env: DB_PATH)")
 		ollamaURL         = flag.String("ollama-url", ollamaURLDefault, "Ollama API URL (env: OLLAMA_URL)")
 		ollamaModel       = flag.String("ollama-model", ollamaModelDefault, "Ollama model to use (env: OLLAMA_MODEL)")
 		useOllama         = flag.Bool("use-ollama", useOllamaDefault, "Enable Ollama for AI-powered analysis (env: USE_OLLAMA)")
@@ -65,10 +71,15 @@ func main() {
 	)
 	flag.Parse()
 
+	// Construct PostgreSQL connection string
+	dbConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPassword, dbName)
+	logger.Info("using PostgreSQL database", "host", dbHost, "port", dbPort, "database", dbName)
+
 	// Initialize database
-	db, err := database.New(*dbPath)
+	db, err := database.New(dbConnStr)
 	if err != nil {
-		logger.Error("failed to initialize database", "error", err, "database_path", *dbPath)
+		logger.Error("failed to initialize database", "error", err, "connection_string", dbConnStr)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -167,7 +178,8 @@ func main() {
 	go func() {
 		logger.Info("textanalyzer service starting",
 			"port", *port,
-			"database", *dbPath,
+			"db_host", dbHost,
+			"db_name", dbName,
 			"ollama_enabled", *useOllama,
 			"ollama_url", *ollamaURL,
 			"ollama_model", *ollamaModel,

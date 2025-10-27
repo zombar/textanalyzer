@@ -1,39 +1,31 @@
 package database
 
 import (
-	"os"
 	"testing"
 )
 
 func TestNew(t *testing.T) {
 	tests := []struct {
 		name        string
-		dbPath      string
+		testID      string
 		expectError bool
 	}{
 		{
-			name:        "valid database path",
-			dbPath:      "test_new.db",
-			expectError: false,
-		},
-		{
-			name:        "memory database",
-			dbPath:      ":memory:",
+			name:        "valid database connection",
+			testID:      "test_new",
 			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			db, err := New(tt.dbPath)
+			connStr, cleanup := setupTestDB(t, tt.testID)
+			defer cleanup()
 
-			// Cleanup
+			db, err := New(connStr)
 			defer func() {
 				if db != nil {
 					db.Close()
-				}
-				if tt.dbPath != ":memory:" {
-					os.Remove(tt.dbPath)
 				}
 			}()
 
@@ -57,7 +49,10 @@ func TestNew(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	db, err := New(":memory:")
+	connStr, cleanup := setupTestDB(t, "test_close")
+	defer cleanup()
+
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
@@ -75,21 +70,19 @@ func TestClose(t *testing.T) {
 }
 
 func TestNewWithInvalidPath(t *testing.T) {
-	// Try to create database in non-existent directory
-	db, err := New("/nonexistent/directory/test.db")
+	// Try to create database with invalid connection string
+	db, err := New("invalid connection string")
 	if err == nil && db != nil {
 		db.Close()
-		t.Error("Expected error when creating database in non-existent directory")
+		t.Error("Expected error when creating database with invalid connection string")
 	}
 }
 
 func TestMigrationsRun(t *testing.T) {
-	// This test verifies that database can be created successfully
-	// The migrations are tested implicitly by the queries package tests
-	dbPath := "test_migrations.db"
-	defer os.Remove(dbPath)
+	connStr, cleanup := setupTestDB(t, "test_migrations")
+	defer cleanup()
 
-	db, err := New(dbPath)
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database with migrations: %v", err)
 	}
@@ -107,7 +100,10 @@ func TestMigrationsRun(t *testing.T) {
 }
 
 func TestDatabaseConnection(t *testing.T) {
-	db, err := New(":memory:")
+	connStr, cleanup := setupTestDB(t, "test_connection")
+	defer cleanup()
+
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
@@ -121,7 +117,10 @@ func TestDatabaseConnection(t *testing.T) {
 }
 
 func TestConnectionPoolSettings(t *testing.T) {
-	db, err := New(":memory:")
+	connStr, cleanup := setupTestDB(t, "test_pool")
+	defer cleanup()
+
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
@@ -140,7 +139,10 @@ func TestConnectionPoolSettings(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	db, err := New(":memory:")
+	connStr, cleanup := setupTestDB(t, "test_concurrent")
+	defer cleanup()
+
+	db, err := New(connStr)
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
@@ -151,7 +153,8 @@ func TestConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			var result int
-			err := db.conn.QueryRow("SELECT ?", id).Scan(&result)
+			// Use PostgreSQL placeholder syntax $1 instead of SQLite ?
+			err := db.conn.QueryRow("SELECT $1", id).Scan(&result)
 			if err != nil {
 				t.Errorf("Concurrent query %d failed: %v", id, err)
 			}
