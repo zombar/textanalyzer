@@ -119,6 +119,40 @@ Output the text:`, text)
 	return c.GenerateResponse(ctx, prompt)
 }
 
+// CleanTextWithHTMLContext performs enhanced text cleaning using offline analysis as a template
+// and original HTML to extract the cleanest possible article text
+func (c *Client) CleanTextWithHTMLContext(ctx context.Context, text, offlineText, originalHTML string) (string, error) {
+	prompt := fmt.Sprintf(`You are an expert text extraction and cleaning assistant. Your task is to extract the cleanest possible article text from the provided HTML.
+
+CONTEXT:
+You have three inputs:
+1. Original extracted text (may contain artifacts)
+2. Offline cleaned text (rule-based cleaning, use as a TEMPLATE/REFERENCE for what content to keep)
+3. Original HTML source (contains the raw article)
+
+INSTRUCTIONS:
+1. Use the offline text as a TEMPLATE to identify which parts of the HTML contain the actual article content
+2. Extract ONLY the main article text from the HTML, following the structure shown in the offline template
+3. REMOVE image captions, photo credits, image attributions, and photographer names
+4. REMOVE phrases like "Image source:", "Photo by:", "Credit:", "Getty Images", etc.
+5. REMOVE navigation elements, advertisements, related articles, and sidebars
+6. REMOVE social media sharing prompts and embedded content descriptions
+7. TRANSLATE the final text to English if it's in another language
+8. Return ONLY the cleaned article text with NO commentary or explanations
+9. Preserve paragraph breaks and article structure
+10. Keep the text natural and readable - remove artifacts but maintain flow
+
+OFFLINE TEMPLATE TEXT (shows what content to keep):
+%s
+
+ORIGINAL HTML TO EXTRACT FROM:
+%s
+
+Extract and output the clean article text in English:`, offlineText, originalHTML)
+
+	return c.GenerateResponse(ctx, prompt)
+}
+
 // EditorialAnalysis provides analysis of bias, motivation, and editorial slant
 func (c *Client) EditorialAnalysis(ctx context.Context, text string) (string, error) {
 	prompt := fmt.Sprintf(`Analyze the following text and provide an unbiased assessment of the nature and purpose of this text (informational, persuasive, entertainment, etc.), possible motivations behind the writing, any editorial slant or bias (left/right, commercial, academic, etc.), and the overall tone and approach.

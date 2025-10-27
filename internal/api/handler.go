@@ -1,12 +1,14 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -22,16 +24,22 @@ import (
 type Handler struct {
 	db          *database.DB
 	analyzer    *analyzer.Analyzer
+	queueClient interface {
+		EnqueueProcessDocument(ctx context.Context, analysisID, text, originalHTML string, images []string) (string, error)
+	}
 	mux         *http.ServeMux
 }
 
 // NewHandler creates a new API handler with CORS support and metrics
-func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
+func NewHandler(db *database.DB, analyzer *analyzer.Analyzer, queueClient interface {
+	EnqueueProcessDocument(ctx context.Context, analysisID, text, originalHTML string, images []string) (string, error)
+}) http.Handler {
 	// Initialize Prometheus metrics
 
 	h := &Handler{
 		db:          db,
 		analyzer:    analyzer,
+		queueClient: queueClient,
 		mux:         http.NewServeMux(),
 	}
 
@@ -54,6 +62,7 @@ func NewHandler(db *database.DB, analyzer *analyzer.Analyzer) http.Handler {
 func (h *Handler) setupRoutes() {
 	h.mux.Handle("/metrics", promhttp.Handler()) // Prometheus metrics endpoint
 	h.mux.HandleFunc("/api/analyze", h.handleAnalyze)
+	h.mux.HandleFunc("/api/jobs/", h.handleJobStatus)
 	h.mux.HandleFunc("/api/analyses", h.handleListAnalyses)
 	h.mux.HandleFunc("/api/analyses/", h.handleAnalysisOperations)
 	h.mux.HandleFunc("/api/uuid/", h.handleUUIDOperations)
@@ -71,7 +80,7 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAnalyze handles text analysis requests
+// handleAnalyze handles text analysis requests - now queue-based
 func (h *Handler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -79,7 +88,9 @@ func (h *Handler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Text string `json:"text"`
+		Text         string   `json:"text"`
+		OriginalHTML string   `json:"original_html,omitempty"` // Compressed + base64 encoded original HTML/raw text
+		Images       []string `json:"images,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -94,69 +105,86 @@ func (h *Handler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 
 	// Add text length to span
 	tracing.SetSpanAttributes(r.Context(),
-		attribute.Int("text.length", len(req.Text)))
+		attribute.Int("text.length", len(req.Text)),
+		attribute.Int("images.count", len(req.Images)))
 
-	// Perform analysis in a goroutine
-	resultChan := make(chan *models.Analysis)
-	errorChan := make(chan error)
+	// Generate analysis ID
+	analysisID := generateID()
 
-	// Pass context to goroutine for tracing
+	// Enqueue document processing task
 	ctx := r.Context()
+	taskID, err := h.queueClient.EnqueueProcessDocument(ctx, analysisID, req.Text, req.OriginalHTML, req.Images)
+	if err != nil {
+		respondError(w, fmt.Sprintf("Failed to enqueue analysis: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	go func() {
-		analysisID := generateID()
+	// Return job ID immediately
+	respondJSON(w, map[string]interface{}{
+		"job_id":   analysisID,
+		"task_id":  taskID,
+		"status":   "queued",
+		"message":  "Analysis queued for processing",
+	}, http.StatusAccepted)
+}
 
-		// Create span for AI analysis
-		ctx, analyzeSpan := tracing.StartSpan(ctx, "ai.analyze_text")
-		analyzeSpan.SetAttributes(
-			attribute.String("analysis.id", analysisID),
-			attribute.Int("text.length", len(req.Text)))
+// handleJobStatus handles job status requests
+func (h *Handler) handleJobStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-		metadata := h.analyzer.Analyze(req.Text)
+	// Extract job ID from path
+	jobID := r.URL.Path[len("/api/jobs/"):]
+	if idx := strings.Index(jobID, "/"); idx != -1 {
+		jobID = jobID[:idx]
+	}
 
-		// Add result metrics
-		if len(metadata.Tags) > 0 {
-			analyzeSpan.SetAttributes(attribute.StringSlice("analysis.tags", metadata.Tags))
-		}
-		if metadata.Synopsis != "" {
-			analyzeSpan.SetAttributes(attribute.Int("synopsis.length", len(metadata.Synopsis)))
-		}
-		analyzeSpan.End()
+	if jobID == "" {
+		respondError(w, "Job ID is required", http.StatusBadRequest)
+		return
+	}
 
-		analysis := &models.Analysis{
-			ID:        analysisID,
-			Text:      req.Text,
-			Metadata:  metadata,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		// Create span for database save
-		ctx, saveSpan := tracing.StartSpan(ctx, "database.save_analysis")
-		saveSpan.SetAttributes(attribute.String("analysis.id", analysisID))
-
-		if err := h.db.SaveAnalysis(analysis); err != nil {
-			tracing.RecordError(ctx, err)
-			saveSpan.End()
-			errorChan <- err
+	// Try to retrieve the analysis
+	analysis, err := h.db.GetAnalysis(jobID)
+	if err != nil {
+		if err.Error() == "analysis not found" {
+			respondJSON(w, map[string]interface{}{
+				"job_id": jobID,
+				"status": "not_found",
+				"message": "Analysis not found - it may still be queued or has expired",
+			}, http.StatusNotFound)
 			return
 		}
-
-		tracing.AddEvent(ctx, "analysis_saved",
-			attribute.String("analysis.id", analysisID))
-		saveSpan.End()
-
-		resultChan <- analysis
-	}()
-
-	select {
-	case analysis := <-resultChan:
-		respondJSON(w, analysis, http.StatusCreated)
-	case err := <-errorChan:
 		respondError(w, err.Error(), http.StatusInternalServerError)
-	case <-time.After(400 * time.Second):
-		respondError(w, "Analysis timeout", http.StatusRequestTimeout)
+		return
 	}
+
+	// Determine status based on analysis metadata
+	status := "completed"
+	if analysis.Metadata.Synopsis == "" && analysis.Metadata.CleanedText == "" {
+		// No AI enrichment yet
+		if analysis.Metadata.QualityScore != nil && analysis.Metadata.QualityScore.Score < 0.35 {
+			status = "completed_offline_only" // Below threshold, won't be enriched
+		} else {
+			status = "processing" // Offline complete, AI enrichment pending/in progress
+		}
+	}
+
+	response := map[string]interface{}{
+		"job_id":     jobID,
+		"status":     status,
+		"created_at": analysis.CreatedAt,
+		"updated_at": analysis.UpdatedAt,
+	}
+
+	// Include analysis if completed
+	if status == "completed" || status == "completed_offline_only" {
+		response["analysis"] = analysis
+	}
+
+	respondJSON(w, response, http.StatusOK)
 }
 
 // handleListAnalyses handles listing all analyses with pagination

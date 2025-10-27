@@ -45,6 +45,14 @@ test-coverage: ## Run tests with coverage
 test-short: ## Run short tests only
 	@go test -short ./...
 
+test-trace: ## Run only trace propagation tests
+	@echo "Running trace propagation tests..."
+	@go test -v -run ".*Trace.*" ./internal/queue/...
+
+test-trace-e2e: ## Run E2E trace flow tests
+	@echo "Running E2E trace flow tests..."
+	@go test -v -run ".*E2ETraceFlow.*" ./internal/queue/...
+
 bench: ## Run benchmarks
 	@echo "Running benchmarks..."
 	@go test -bench=. -benchmem ./internal/analyzer

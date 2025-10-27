@@ -4,11 +4,12 @@ import "time"
 
 // Analysis represents a text analysis with its metadata
 type Analysis struct {
-	ID        string    `json:"id"`
-	Text      string    `json:"text"`
-	Metadata  Metadata  `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	Text         string    `json:"text"`
+	OriginalHTML string    `json:"original_html,omitempty"` // Compressed + base64 encoded original HTML/raw text
+	Metadata     Metadata  `json:"metadata"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Metadata contains all extracted information from text analysis

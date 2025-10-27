@@ -69,6 +69,28 @@ var migrations = []Migration{
 			CREATE INDEX IF NOT EXISTS idx_text_references_type ON text_references(type);
 		`,
 	},
+	{
+		Version: 5,
+		Name:    "add_job_tracking_columns",
+		SQL: `
+			ALTER TABLE analyses ADD COLUMN processing_stage TEXT DEFAULT 'offline';
+			ALTER TABLE analyses ADD COLUMN enqueued_at DATETIME;
+			ALTER TABLE analyses ADD COLUMN started_at DATETIME;
+			ALTER TABLE analyses ADD COLUMN completed_at DATETIME;
+			ALTER TABLE analyses ADD COLUMN retry_count INTEGER DEFAULT 0;
+			ALTER TABLE analyses ADD COLUMN max_retries INTEGER DEFAULT 10;
+			ALTER TABLE analyses ADD COLUMN last_error TEXT;
+			CREATE INDEX IF NOT EXISTS idx_analyses_processing_stage ON analyses(processing_stage);
+			CREATE INDEX IF NOT EXISTS idx_analyses_enqueued_at ON analyses(enqueued_at);
+		`,
+	},
+	{
+		Version: 6,
+		Name:    "add_original_html_column",
+		SQL: `
+			ALTER TABLE analyses ADD COLUMN original_html TEXT;
+		`,
+	},
 }
 
 // Migrate runs all pending migrations

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,13 @@ import (
 	"github.com/zombar/textanalyzer/internal/database"
 	"github.com/zombar/textanalyzer/internal/models"
 )
+
+// mockQueueClient implements the queue client interface for testing
+type mockQueueClient struct{}
+
+func (m *mockQueueClient) EnqueueProcessDocument(ctx context.Context, analysisID, text, originalHTML string, images []string) (string, error) {
+	return "mock-task-id", nil
+}
 
 func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 	// Reset Prometheus registry to avoid metric registration conflicts between tests
@@ -31,13 +39,15 @@ func setupTestHandler(t *testing.T) (*Handler, *database.DB, func()) {
 	}
 
 	a := analyzer.New()
-	_ = NewHandler(db, a)
+	mockQueue := &mockQueueClient{}
+	_ = NewHandler(db, a, mockQueue)
 
 	// Create internal handler for testing
 	handler := &Handler{
-		db:       db,
-		analyzer: a,
-		mux:      http.NewServeMux(),
+		db:          db,
+		analyzer:    a,
+		queueClient: mockQueue,
+		mux:         http.NewServeMux(),
 	}
 	handler.setupRoutes()
 
@@ -87,26 +97,31 @@ func TestAnalyzeEndpoint(t *testing.T) {
 
 	handler.mux.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Expected status 201, got %d", w.Code)
+	// API now returns 202 Accepted (async processing) instead of 201 Created
+	if w.Code != http.StatusAccepted {
+		t.Errorf("Expected status 202 (Accepted), got %d: %s", w.Code, w.Body.String())
 	}
 
-	var response models.Analysis
+	// Response now contains job_id and task_id for async processing
+	var response map[string]interface{}
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if response.ID == "" {
-		t.Error("Expected analysis ID to be set")
+	if response["job_id"] == nil || response["job_id"].(string) == "" {
+		t.Errorf("Expected job_id to be set in response, got: %v", response)
 	}
 
-	if response.Text != reqBody["text"] {
-		t.Error("Expected text to match request")
+	if response["task_id"] == nil || response["task_id"].(string) == "" {
+		t.Errorf("Expected task_id to be set in response, got: %v", response)
 	}
 
-	if response.Metadata.WordCount == 0 {
-		t.Error("Expected word count to be greater than 0")
+	if response["status"] != "queued" {
+		t.Errorf("Expected status to be 'queued', got: %v", response["status"])
 	}
+
+	// Note: Analysis is processed asynchronously by worker,
+	// so we can't verify the full analysis results in this test
 }
 
 func TestAnalyzeEndpointEmptyText(t *testing.T) {
