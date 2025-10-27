@@ -9,7 +9,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/ollama/ollama v0.12.6
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zombar/purpletab/pkg/metrics v0.0.0-00010101000000-000000000000
 	github.com/zombar/purpletab/pkg/tracing v0.0.0-00010101000000-000000000000
