@@ -140,12 +140,19 @@ func main() {
 	// Initialize API handler with queue client
 	apiHandler := api.NewHandler(db, textAnalyzer, queueClient)
 
-	// Wrap handler with middleware chain: HTTP logging -> metrics -> tracing -> handlers
-	handler := logging.HTTPLoggingMiddleware(logger)(
-		metrics.HTTPMiddleware("textanalyzer")(
-			tracing.HTTPMiddleware("textanalyzer")(apiHandler),
-		),
-	)
+	// Setup server with middleware chain (applied bottom-up, executes top-down):
+	// Execution order: tracing -> metrics -> logging -> handlers
+	// This ensures tracing creates span BEFORE logging tries to read trace context
+	var handler http.Handler = apiHandler
+
+	// Add HTTP request logging (innermost, executes last)
+	handler = logging.HTTPLoggingMiddleware(logger)(handler)
+
+	// Add HTTP metrics middleware
+	handler = metrics.HTTPMiddleware("textanalyzer")(handler)
+
+	// Wrap with tracing middleware (outermost, executes first)
+	handler = tracing.HTTPMiddleware("textanalyzer")(handler)
 
 	// Create server with extended timeouts for AI processing
 	srv := &http.Server{
