@@ -185,21 +185,16 @@ func (c *Client) GenerateTags(ctx context.Context, text string, metadata map[str
 
 	prompt := fmt.Sprintf(`Analyze the following text and generate up to 10 relevant tags that categorize and describe the content.
 
-Tag formatting rules:
-- Prefer single-word tags whenever possible
-- Multi-word tags should use hyphens only (no spaces or underscores)
-- Names of people, places, and things make excellent tags
-- All tags should be lowercase
-- Examples: "technology", "climate-change", "new-york", "machine-learning", "einstein"
+Tag formatting rules: Prefer single-word tags whenever possible. Multi-word tags should use hyphens only, with no spaces or underscores. Names of people, places, and things make excellent tags. All tags should be lowercase. Examples include "technology", "climate-change", "new-york", "machine-learning", and "einstein".
 
-Consider: topic, domain, sentiment (%s), content type, key themes, named entities (people, places, organizations).
+Consider the topic, domain, sentiment (%s), content type, key themes, and named entities such as people, places, and organizations.
 
-Return ONLY a JSON array of strings, nothing else.
+CRITICAL: Your response MUST be a valid JSON array of strings and nothing else. Do not include any explanatory text, commentary, or prose. Output only the JSON array in this exact format: ["tag1", "tag2", "tag3"]
 
 Text:
 %s
 
-Tags (JSON array):`, sentiment, text)
+Tags (JSON array only):`, sentiment, text)
 
 	response, err := c.GenerateResponse(ctx, prompt)
 	if err != nil {
