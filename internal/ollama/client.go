@@ -115,12 +115,11 @@ Synopsis:`, text)
 func (c *Client) CleanText(ctx context.Context, text string) (string, error) {
 	prompt := fmt.Sprintf(`Your task is to clean the following text by removing artifacts, formatting issues, advertisements, navigation elements, and other non-relevant content.
 
-IMPORTANT INSTRUCTIONS:
-- If the text is already clean and well-formatted, return it EXACTLY as provided
-- If there are issues to clean, return ONLY the cleaned article content
-- Do NOT add any commentary, explanations, or meta-analysis
-- Do NOT say things like "the text is clean" or "no changes needed"
-- Simply return the text (cleaned or as-is)
+If the text is already clean and well-formatted, return it EXACTLY as provided. If there are issues to clean, return ONLY the cleaned article content without any commentary, explanations, or meta-analysis. Simply return the text, cleaned or as-is.
+
+First determine if this is a single article covering one main topic, or a newsletter and composite article covering multiple distinct topics or sections. For single articles, strongly preserve the original writing style using natural freeform prose exactly as the author wrote it. Do not convert narrative content into lists or bullet points. For newsletters or composite articles covering multiple topics, headings and bullet points are acceptable to organize the different sections.
+
+Never modify, paraphrase, or alter any quoted text. Keep all quotes exactly as they appear in the original, completely intact and wholly representative. Make minimal changes to the original text, only removing clear artifacts, advertisements, and navigation elements. Preserve the author's voice, tone, and writing style throughout.
 
 Text to process:
 %s
@@ -135,23 +134,15 @@ Output the text:`, text)
 func (c *Client) CleanTextWithHTMLContext(ctx context.Context, text, offlineText, originalHTML string) (string, error) {
 	prompt := fmt.Sprintf(`You are an expert text extraction and cleaning assistant. Your task is to extract the cleanest possible article text from the provided HTML.
 
-CONTEXT:
-You have three inputs:
-1. Original extracted text (may contain artifacts)
-2. Offline cleaned text (rule-based cleaning, use as a TEMPLATE/REFERENCE for what content to keep)
-3. Original HTML source (contains the raw article)
+You have three inputs available: the original extracted text which may contain artifacts, the offline cleaned text which should be used as a template and reference for what content to keep, and the original HTML source which contains the raw article.
 
-INSTRUCTIONS:
-1. Use the offline text as a TEMPLATE to identify which parts of the HTML contain the actual article content
-2. Extract ONLY the main article text from the HTML, following the structure shown in the offline template
-3. REMOVE image captions, photo credits, image attributions, and photographer names
-4. REMOVE phrases like "Image source:", "Photo by:", "Credit:", "Getty Images", etc.
-5. REMOVE navigation elements, advertisements, related articles, and sidebars
-6. REMOVE social media sharing prompts and embedded content descriptions
-7. TRANSLATE the final text to English if it's in another language
-8. Return ONLY the cleaned article text with NO commentary or explanations
-9. Preserve paragraph breaks and article structure
-10. Keep the text natural and readable - remove artifacts but maintain flow
+Use the offline text as a template to identify which parts of the HTML contain the actual article content. Extract only the main article text from the HTML, following the structure shown in the offline template. Remove image captions, photo credits, image attributions, photographer names, and phrases like "Image source:", "Photo by:", "Credit:", or "Getty Images". Remove navigation elements, advertisements, related articles, sidebars, social media sharing prompts, and embedded content descriptions. If the text is in another language, translate the final output to English.
+
+First determine if this is a single article covering one main topic, or a newsletter and composite article covering multiple distinct topics. For single articles, strongly preserve the original writing style using natural freeform prose exactly as the author wrote it. Do not convert narrative content into lists or bullet points. For newsletters or composite articles covering multiple topics, headings and organizational formatting are acceptable.
+
+Never modify, paraphrase, or alter any quoted text. Keep all quotes exactly as they appear in the original, completely intact and wholly representative. Make minimal changes to the original text. Preserve paragraph breaks, article structure, the author's voice, tone, and writing style. Keep the text natural and readable, removing artifacts but maintaining flow.
+
+Return only the cleaned article text with no commentary or explanations.
 
 OFFLINE TEMPLATE TEXT (shows what content to keep):
 %s
