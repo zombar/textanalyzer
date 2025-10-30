@@ -107,6 +107,11 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 		"score", earlyQualityScore.Score,
 		"threshold", QUALITY_THRESHOLD)
 
+	// Generate heuristic cleaned text first
+	heuristicCleaned := a.cleanTextOffline(text)
+	metadata.HeuristicCleanedText = heuristicCleaned
+	metadata.CleanedText = heuristicCleaned // Will be overwritten by AI cleaning if successful
+
 	// AI-powered analysis (if Ollama client is available)
 	if a.ollamaClient != nil {
 		slog.Info("ollama client available, starting AI-powered analysis")
@@ -120,13 +125,13 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			slog.Warn("synopsis generation failed", "error", err)
 		}
 
-		// Clean text
-		slog.Info("cleaning text")
+		// Clean text with AI
+		slog.Info("cleaning text with AI")
 		if cleanedText, err := a.ollamaClient.CleanText(ctx, text); err == nil {
 			metadata.CleanedText = cleanedText
-			slog.Info("text cleaned", "length", len(cleanedText))
+			slog.Info("AI text cleaning completed", "length", len(cleanedText))
 		} else {
-			slog.Warn("text cleaning failed", "error", err)
+			slog.Warn("AI text cleaning failed, using heuristic version", "error", err)
 		}
 
 		// Editorial analysis
@@ -316,8 +321,10 @@ func (a *Analyzer) AnalyzeOffline(text string) models.Metadata {
 
 	// Advanced offline text cleaning using heuristics
 	// This extracts article content and removes boilerplate/navigation
-	metadata.CleanedText = a.cleanTextOffline(text)
-	cleanedWordCount := len(extractWords(metadata.CleanedText))
+	heuristicCleaned := a.cleanTextOffline(text)
+	metadata.HeuristicCleanedText = heuristicCleaned
+	metadata.CleanedText = heuristicCleaned // Will be overwritten by AI cleaning if Ollama is available
+	cleanedWordCount := len(extractWords(heuristicCleaned))
 	slog.Info("offline cleaning complete",
 		"original_words", metadata.WordCount,
 		"cleaned_words", cleanedWordCount,
@@ -1469,6 +1476,9 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 	metadata.ExclamationCount = strings.Count(text, "!")
 	metadata.CapitalizedPercent = calculateCapitalizedPercent(text)
 
+	// Store the heuristic cleaned text (offlineText parameter)
+	metadata.HeuristicCleanedText = offlineText
+
 	// AI-powered analysis with HTML context (if Ollama client is available)
 	if a.ollamaClient != nil {
 		slog.Info("ollama client available, starting enhanced AI-powered analysis with HTML context")
@@ -1604,6 +1614,9 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 	} else {
 		slog.Info("ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
+		// Use heuristic cleaned text as the cleaned text
+		metadata.CleanedText = offlineText
+
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
 
