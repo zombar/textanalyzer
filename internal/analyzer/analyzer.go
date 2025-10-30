@@ -110,7 +110,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 	// Generate heuristic cleaned text first
 	heuristicCleaned := a.cleanTextOffline(text)
 	metadata.HeuristicCleanedText = heuristicCleaned
-	metadata.CleanedText = heuristicCleaned // Will be overwritten by AI cleaning if successful
+	// CleanedText is left empty and will only be populated by AI cleaning
 
 	// AI-powered analysis (if Ollama client is available)
 	if a.ollamaClient != nil {
@@ -131,7 +131,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context, text string) models.M
 			metadata.CleanedText = cleanedText
 			slog.Info("AI text cleaning completed", "length", len(cleanedText))
 		} else {
-			slog.Warn("AI text cleaning failed, using heuristic version", "error", err)
+			slog.Warn("AI text cleaning failed, CleanedText will remain empty", "error", err)
 		}
 
 		// Editorial analysis
@@ -323,7 +323,7 @@ func (a *Analyzer) AnalyzeOffline(text string) models.Metadata {
 	// This extracts article content and removes boilerplate/navigation
 	heuristicCleaned := a.cleanTextOffline(text)
 	metadata.HeuristicCleanedText = heuristicCleaned
-	metadata.CleanedText = heuristicCleaned // Will be overwritten by AI cleaning if Ollama is available
+	// CleanedText is left empty and will be populated by AI cleaning if it runs
 	cleanedWordCount := len(extractWords(heuristicCleaned))
 	slog.Info("offline cleaning complete",
 		"original_words", metadata.WordCount,
@@ -1614,8 +1614,7 @@ func (a *Analyzer) AnalyzeWithHTMLContext(ctx context.Context, text, offlineText
 	} else {
 		slog.Info("ollama client not available, using rule-based analysis")
 		// Fallback to rule-based analysis when Ollama is not available
-		// Use heuristic cleaned text as the cleaned text
-		metadata.CleanedText = offlineText
+		// CleanedText remains empty, consumers should use HeuristicCleanedText
 
 		metadata.References = extractReferences(text)
 		metadata.Tags = generateTags(text, metadata)
