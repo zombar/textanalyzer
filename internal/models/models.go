@@ -56,10 +56,11 @@ type Metadata struct {
 	CapitalizedPercent float64 `json:"capitalized_percent"`
 
 	// AI-generated content
-	Synopsis          string            `json:"synopsis"`           // 3-4 sentence summary
-	CleanedText       string            `json:"cleaned_text"`       // Text with artifacts removed
-	EditorialAnalysis string            `json:"editorial_analysis"` // Bias, motivation, and slant analysis
-	AIDetection       AIDetectionResult `json:"ai_detection"`       // AI-generated content detection
+	Synopsis               string            `json:"synopsis"`                  // 3-4 sentence summary
+	CleanedText            string            `json:"cleaned_text"`              // AI-cleaned text with artifacts removed
+	HeuristicCleanedText   string            `json:"heuristic_cleaned_text"`    // Rule-based/heuristic cleaned text
+	EditorialAnalysis      string            `json:"editorial_analysis"`        // Bias, motivation, and slant analysis
+	AIDetection            AIDetectionResult `json:"ai_detection"`              // AI-generated content detection
 
 	// Quality scoring
 	QualityScore *TextQualityScore `json:"quality_score,omitempty"` // Text quality assessment
