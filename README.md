@@ -1,7 +1,7 @@
 # TextAnalyzer Service
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/zombar/purpletab)](https://goreportcard.com/report/github.com/zombar/purpletab)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/zombar/purpletab)](go.mod)
+[![Go Report Card](https://goreportcard.com/badge/github.com/docutag/platform)](https://goreportcard.com/report/github.com/docutag/platform)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/docutag/platform)](go.mod)
 
 A comprehensive text analysis service built in Go that extracts extensive metadata from text, including sentiment analysis, readability scoring, named entity recognition, and AI-powered content analysis. Features a sophisticated two-stage pipeline with advanced offline cleaning and async queue-based processing.
 
