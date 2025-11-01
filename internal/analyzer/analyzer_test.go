@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zombar/textanalyzer/internal/ollama"
+	"github.com/docutag/textanalyzer/internal/ollama"
 )
 
 func TestAnalyze(t *testing.T) {

@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zombar/purpletab/pkg/metrics"
-	"github.com/zombar/purpletab/pkg/tracing"
-	"github.com/zombar/textanalyzer/internal/analyzer"
-	"github.com/zombar/textanalyzer/internal/api"
-	"github.com/zombar/textanalyzer/internal/database"
-	"github.com/zombar/textanalyzer/internal/ollama"
-	"github.com/zombar/textanalyzer/internal/queue"
-	"github.com/zombar/textanalyzer/pkg/logging"
+	"github.com/docutag/platform/pkg/metrics"
+	"github.com/docutag/platform/pkg/tracing"
+	"github.com/docutag/textanalyzer/internal/analyzer"
+	"github.com/docutag/textanalyzer/internal/api"
+	"github.com/docutag/textanalyzer/internal/database"
+	"github.com/docutag/textanalyzer/internal/ollama"
+	"github.com/docutag/textanalyzer/internal/queue"
+	"github.com/docutag/textanalyzer/pkg/logging"
 )
 
 func main() {

@@ -1,18 +1,19 @@
-module github.com/zombar/textanalyzer
+module github.com/docutag/textanalyzer
 
 go 1.24.0
 
 toolchain go1.24.9
 
 require (
+	github.com/docutag/platform/pkg/metrics v0.0.0-00010101000000-000000000000
+	github.com/docutag/platform/pkg/tracing v0.0.0-00010101000000-000000000000
 	github.com/hibiken/asynq v0.24.1
 	github.com/lib/pq v1.10.9
 	github.com/ollama/ollama v0.12.6
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rs/cors v1.10.1
 	github.com/stretchr/testify v1.11.1
-	github.com/zombar/purpletab/pkg/metrics v0.0.0-00010101000000-000000000000
-	github.com/zombar/purpletab/pkg/tracing v0.0.0-00010101000000-000000000000
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
@@ -39,7 +40,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
@@ -57,6 +57,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/zombar/purpletab/pkg/tracing => ../../pkg/tracing
+replace github.com/docutag/platform/pkg/tracing => ../../pkg/tracing
 
-replace github.com/zombar/purpletab/pkg/metrics => ../../pkg/metrics
+replace github.com/docutag/platform/pkg/metrics => ../../pkg/metrics

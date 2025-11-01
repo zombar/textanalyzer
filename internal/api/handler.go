@@ -13,10 +13,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
-	"github.com/zombar/purpletab/pkg/tracing"
-	"github.com/zombar/textanalyzer/internal/analyzer"
-	"github.com/zombar/textanalyzer/internal/database"
-	"github.com/zombar/textanalyzer/internal/models"
+	"github.com/docutag/platform/pkg/tracing"
+	"github.com/docutag/textanalyzer/internal/analyzer"
+	"github.com/docutag/textanalyzer/internal/database"
+	"github.com/docutag/textanalyzer/internal/models"
 	"go.opentelemetry.io/otel/attribute"
 )
 
