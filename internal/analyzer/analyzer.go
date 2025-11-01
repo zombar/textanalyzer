@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/zombar/textanalyzer/internal/models"
-	"github.com/zombar/textanalyzer/internal/ollama"
+	"github.com/docutag/textanalyzer/internal/models"
+	"github.com/docutag/textanalyzer/internal/ollama"
 )
 
 // Analyzer performs text analysis

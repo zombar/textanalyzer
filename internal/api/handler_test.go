@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/zombar/textanalyzer/internal/analyzer"
-	"github.com/zombar/textanalyzer/internal/database"
-	"github.com/zombar/textanalyzer/internal/models"
+	"github.com/docutag/textanalyzer/internal/analyzer"
+	"github.com/docutag/textanalyzer/internal/database"
+	"github.com/docutag/textanalyzer/internal/models"
 )
 
 // mockQueueClient implements the queue client interface for testing

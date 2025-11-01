@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/zombar/purpletab/pkg/metrics"
-	"github.com/zombar/textanalyzer/internal/analyzer"
-	"github.com/zombar/textanalyzer/internal/database"
+	"github.com/docutag/platform/pkg/metrics"
+	"github.com/docutag/textanalyzer/internal/analyzer"
+	"github.com/docutag/textanalyzer/internal/database"
 )
 
 // Worker wraps the Asynq server for processing tasks

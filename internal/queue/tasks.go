@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/zombar/textanalyzer/internal/models"
+	"github.com/docutag/textanalyzer/internal/models"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
