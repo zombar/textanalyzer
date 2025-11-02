@@ -46,7 +46,7 @@ var migrations = []Migration{
 		Version: 3,
 		Name:    "create_schema_version_table",
 		SQL: `
-			CREATE TABLE IF NOT EXISTS schema_version (
+			CREATE TABLE IF NOT EXISTS textanalyzer_schema_version (
 				version INTEGER PRIMARY KEY,
 				applied_at TIMESTAMPTZ DEFAULT NOW()
 			);
@@ -105,7 +105,7 @@ func (db *DB) Migrate() error {
 	slog.Default().Info("checking current schema version")
 	// Get current version
 	var currentVersion int
-	err := db.conn.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&currentVersion)
+	err := db.conn.QueryRow("SELECT COALESCE(MAX(version), 0) FROM textanalyzer_schema_version").Scan(&currentVersion)
 	if err != nil {
 		return fmt.Errorf("failed to get current version: %w", err)
 	}
@@ -130,7 +130,7 @@ func (db *DB) Migrate() error {
 		}
 
 		// Use PostgreSQL $1 placeholder instead of ?
-		if _, err := tx.Exec("INSERT INTO schema_version (version) VALUES ($1)", migration.Version); err != nil {
+		if _, err := tx.Exec("INSERT INTO textanalyzer_schema_version (version) VALUES ($1)", migration.Version); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("failed to record migration %d: %w", migration.Version, err)
 		}
