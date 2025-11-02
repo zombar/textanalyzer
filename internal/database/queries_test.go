@@ -300,7 +300,7 @@ func TestCascadeDelete(t *testing.T) {
 
 	// Verify tags exist (using PostgreSQL placeholder $1)
 	var tagCount int
-	err := db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
+	err := db.conn.QueryRow("SELECT COUNT(*) FROM textanalyzer_tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestCascadeDelete(t *testing.T) {
 	}
 
 	// Verify tags are deleted (using PostgreSQL placeholder $1)
-	err = db.conn.QueryRow("SELECT COUNT(*) FROM tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
+	err = db.conn.QueryRow("SELECT COUNT(*) FROM textanalyzer_tags WHERE analysis_id = $1", "test-cascade-001").Scan(&tagCount)
 	if err != nil {
 		t.Fatalf("Failed to count tags after delete: %v", err)
 	}
