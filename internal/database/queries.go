@@ -24,7 +24,7 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 
 	// Insert or replace analysis (use ON CONFLICT to handle updates during enrichment)
 	_, err = tx.Exec(`
-		INSERT INTO analyses (id, text, metadata, created_at, updated_at)
+		INSERT INTO textanalyzer_analyses (id, text, metadata, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (id) DO UPDATE SET
 			text = EXCLUDED.text,
@@ -36,12 +36,12 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 	}
 
 	// Delete existing tags and references for this analysis to avoid duplicates
-	_, err = tx.Exec(`DELETE FROM tags WHERE analysis_id = $1`, analysis.ID)
+	_, err = tx.Exec(`DELETE FROM textanalyzer_tags WHERE analysis_id = $1`, analysis.ID)
 	if err != nil {
 		return fmt.Errorf("failed to delete existing tags: %w", err)
 	}
 
-	_, err = tx.Exec(`DELETE FROM text_references WHERE analysis_id = $1`, analysis.ID)
+	_, err = tx.Exec(`DELETE FROM textanalyzer_text_references WHERE analysis_id = $1`, analysis.ID)
 	if err != nil {
 		return fmt.Errorf("failed to delete existing references: %w", err)
 	}
@@ -49,7 +49,7 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 	// Insert tags
 	for _, tag := range analysis.Metadata.Tags {
 		_, err = tx.Exec(`
-			INSERT INTO tags (analysis_id, tag)
+			INSERT INTO textanalyzer_tags (analysis_id, tag)
 			VALUES ($1, $2)
 		`, analysis.ID, tag)
 		if err != nil {
@@ -60,7 +60,7 @@ func (db *DB) SaveAnalysis(analysis *models.Analysis) error {
 	// Insert references
 	for _, ref := range analysis.Metadata.References {
 		_, err = tx.Exec(`
-			INSERT INTO text_references (analysis_id, text, type, context, confidence)
+			INSERT INTO textanalyzer_text_references (analysis_id, text, type, context, confidence)
 			VALUES ($1, $2, $3, $4, $5)
 		`, analysis.ID, ref.Text, ref.Type, ref.Context, ref.Confidence)
 		if err != nil {
@@ -86,7 +86,7 @@ func (db *DB) GetAnalysis(id string) (*models.Analysis, error) {
 
 	err := db.conn.QueryRow(`
 		SELECT text, metadata, created_at, updated_at
-		FROM analyses
+		FROM textanalyzer_analyses
 		WHERE id = $1
 	`, id).Scan(&text, &metadataJSON, &createdAt, &updatedAt)
 
@@ -115,7 +115,7 @@ func (db *DB) GetAnalysis(id string) (*models.Analysis, error) {
 func (db *DB) GetAnalysesByTag(tag string) ([]*models.Analysis, error) {
 	rows, err := db.conn.Query(`
 		SELECT DISTINCT a.id, a.text, a.metadata, a.created_at, a.updated_at
-		FROM analyses a
+		FROM textanalyzer_analyses a
 		INNER JOIN tags t ON a.id = t.analysis_id
 		WHERE t.tag = $1
 		ORDER BY a.created_at DESC
@@ -164,7 +164,7 @@ func (db *DB) GetAnalysesByTag(tag string) ([]*models.Analysis, error) {
 func (db *DB) ListAnalyses(limit, offset int) ([]*models.Analysis, error) {
 	rows, err := db.conn.Query(`
 		SELECT id, text, metadata, created_at, updated_at
-		FROM analyses
+		FROM textanalyzer_analyses
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
@@ -210,7 +210,7 @@ func (db *DB) ListAnalyses(limit, offset int) ([]*models.Analysis, error) {
 
 // DeleteAnalysis deletes an analysis by ID
 func (db *DB) DeleteAnalysis(id string) error {
-	result, err := db.conn.Exec("DELETE FROM analyses WHERE id = $1", id)
+	result, err := db.conn.Exec("DELETE FROM textanalyzer_analyses WHERE id = $1", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete analysis: %w", err)
 	}
@@ -231,7 +231,7 @@ func (db *DB) DeleteAnalysis(id string) error {
 func (db *DB) GetAnalysesByReference(referenceText string) ([]*models.Analysis, error) {
 	rows, err := db.conn.Query(`
 		SELECT DISTINCT a.id, a.text, a.metadata, a.created_at, a.updated_at
-		FROM analyses a
+		FROM textanalyzer_analyses a
 		INNER JOIN text_references r ON a.id = r.analysis_id
 		WHERE r.text LIKE $1
 		ORDER BY a.created_at DESC

@@ -18,28 +18,28 @@ var migrations = []Migration{
 		Version: 1,
 		Name:    "create_analyses_table",
 		SQL: `
-			CREATE TABLE IF NOT EXISTS analyses (
+			CREATE TABLE IF NOT EXISTS textanalyzer_analyses (
 				id TEXT PRIMARY KEY,
 				text TEXT NOT NULL,
 				metadata JSONB NOT NULL,
 				created_at TIMESTAMPTZ DEFAULT NOW(),
 				updated_at TIMESTAMPTZ DEFAULT NOW()
 			);
-			CREATE INDEX IF NOT EXISTS idx_analyses_created_at ON analyses(created_at);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_analyses_created_at ON textanalyzer_analyses(created_at);
 		`,
 	},
 	{
 		Version: 2,
 		Name:    "create_tags_table",
 		SQL: `
-			CREATE TABLE IF NOT EXISTS tags (
+			CREATE TABLE IF NOT EXISTS textanalyzer_tags (
 				id SERIAL PRIMARY KEY,
 				analysis_id TEXT NOT NULL,
 				tag TEXT NOT NULL,
-				FOREIGN KEY (analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
+				FOREIGN KEY (analysis_id) REFERENCES textanalyzer_analyses(id) ON DELETE CASCADE
 			);
-			CREATE INDEX IF NOT EXISTS idx_tags_analysis_id ON tags(analysis_id);
-			CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_tags_analysis_id ON textanalyzer_tags(analysis_id);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_tags_tag ON textanalyzer_tags(tag);
 		`,
 	},
 	{
@@ -56,40 +56,40 @@ var migrations = []Migration{
 		Version: 4,
 		Name:    "create_text_references_table",
 		SQL: `
-			CREATE TABLE IF NOT EXISTS text_references (
+			CREATE TABLE IF NOT EXISTS textanalyzer_text_references (
 				id SERIAL PRIMARY KEY,
 				analysis_id TEXT NOT NULL,
 				text TEXT NOT NULL,
 				type TEXT NOT NULL,
 				context TEXT,
 				confidence TEXT,
-				FOREIGN KEY (analysis_id) REFERENCES analyses(id) ON DELETE CASCADE
+				FOREIGN KEY (analysis_id) REFERENCES textanalyzer_analyses(id) ON DELETE CASCADE
 			);
-			CREATE INDEX IF NOT EXISTS idx_text_references_analysis_id ON text_references(analysis_id);
-			CREATE INDEX IF NOT EXISTS idx_text_references_text ON text_references(text);
-			CREATE INDEX IF NOT EXISTS idx_text_references_type ON text_references(type);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_text_references_analysis_id ON textanalyzer_text_references(analysis_id);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_text_references_text ON textanalyzer_text_references(text);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_text_references_type ON textanalyzer_text_references(type);
 		`,
 	},
 	{
 		Version: 5,
 		Name:    "add_job_tracking_columns",
 		SQL: `
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS processing_stage TEXT DEFAULT 'offline';
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS enqueued_at TIMESTAMPTZ;
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 10;
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS last_error TEXT;
-			CREATE INDEX IF NOT EXISTS idx_analyses_processing_stage ON analyses(processing_stage);
-			CREATE INDEX IF NOT EXISTS idx_analyses_enqueued_at ON analyses(enqueued_at);
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS processing_stage TEXT DEFAULT 'offline';
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS enqueued_at TIMESTAMPTZ;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS max_retries INTEGER DEFAULT 10;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS last_error TEXT;
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_analyses_processing_stage ON textanalyzer_analyses(processing_stage);
+			CREATE INDEX IF NOT EXISTS idx_textanalyzer_analyses_enqueued_at ON textanalyzer_analyses(enqueued_at);
 		`,
 	},
 	{
 		Version: 6,
 		Name:    "add_original_html_column",
 		SQL: `
-			ALTER TABLE analyses ADD COLUMN IF NOT EXISTS original_html TEXT;
+			ALTER TABLE textanalyzer_analyses ADD COLUMN IF NOT EXISTS original_html TEXT;
 		`,
 	},
 }
