@@ -29,8 +29,8 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy binary from builder
-COPY --from=builder /build/apps/textanalyzer/textanalyzer .
+# Copy binary from builder and set executable permissions
+COPY --from=builder --chmod=755 /build/apps/textanalyzer/textanalyzer .
 
 # Expose port
 EXPOSE 8080
