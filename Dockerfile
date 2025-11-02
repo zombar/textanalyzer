@@ -27,10 +27,20 @@ FROM alpine:3.20
 # Install minimal runtime dependencies
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create non-root user
+RUN addgroup -g 1000 textanalyzer && \
+    adduser -D -u 1000 -G textanalyzer textanalyzer
+
+WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /build/apps/textanalyzer/textanalyzer .
+
+# Set ownership and executable permissions
+RUN chown textanalyzer:textanalyzer textanalyzer && chmod +x textanalyzer
+
+# Switch to non-root user
+USER textanalyzer
 
 # Expose port
 EXPOSE 8080
